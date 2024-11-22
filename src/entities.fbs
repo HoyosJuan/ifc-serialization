@@ -1,0 +1,27 @@
+namespace IFC.Entities;
+
+table Attribute {
+  name: string;
+  value: string;
+}
+
+table Entity {
+  // add expressID here
+  // add type index here
+  attrs: [Attribute];
+}
+
+table Relation {
+  expressID: int;
+  IsDecomposedBy: [int];
+  Decomposes: [int];
+}
+
+table Data {
+  values: [string];
+  types: [int64];
+  entities: [Entity];
+  relations: [Relation];
+}
+
+root_type Data;

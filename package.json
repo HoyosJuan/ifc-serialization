@@ -1,0 +1,22 @@
+{
+  "name": "ifc-serialization",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "node": "tsc && node dist/index.js",
+    "flatbuffers": "cd ./src && flatc --ts entities.fbs --no-warnings"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "flatbuffers": "^24.3.25",
+    "web-ifc": "0.0.65"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.1",
+    "typescript": "^5.6.3"
+  }
+}
