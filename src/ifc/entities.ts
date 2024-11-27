@@ -2,7 +2,8 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
-export { Attribute } from './entities/attribute.js';
 export { Data } from './entities/data.js';
+export { Def } from './entities/def.js';
 export { Entity } from './entities/entity.js';
-export { Relation } from './entities/relation.js';
+export { Rel } from './entities/rel.js';
+export { Types } from './entities/types.js';

@@ -22,16 +22,16 @@ static getSizePrefixedRootAsAttribute(bb:flatbuffers.ByteBuffer, obj?:Attribute)
   return (obj || new Attribute()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-name():string|null
-name(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
-name(optionalEncoding?:any):string|Uint8Array|null {
+value():string|null
+value(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+value(optionalEncoding?:any):string|Uint8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 4);
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
-value():string|null
-value(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
-value(optionalEncoding?:any):string|Uint8Array|null {
+type():string|null
+type(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+type(optionalEncoding?:any):string|Uint8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
@@ -40,12 +40,12 @@ static startAttribute(builder:flatbuffers.Builder) {
   builder.startObject(2);
 }
 
-static addName(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(0, nameOffset, 0);
+static addValue(builder:flatbuffers.Builder, valueOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(0, valueOffset, 0);
 }
 
-static addValue(builder:flatbuffers.Builder, valueOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(1, valueOffset, 0);
+static addType(builder:flatbuffers.Builder, typeOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(1, typeOffset, 0);
 }
 
 static endAttribute(builder:flatbuffers.Builder):flatbuffers.Offset {
@@ -53,10 +53,10 @@ static endAttribute(builder:flatbuffers.Builder):flatbuffers.Offset {
   return offset;
 }
 
-static createAttribute(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset, valueOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createAttribute(builder:flatbuffers.Builder, valueOffset:flatbuffers.Offset, typeOffset:flatbuffers.Offset):flatbuffers.Offset {
   Attribute.startAttribute(builder);
-  Attribute.addName(builder, nameOffset);
   Attribute.addValue(builder, valueOffset);
+  Attribute.addType(builder, typeOffset);
   return Attribute.endAttribute(builder);
 }
 }

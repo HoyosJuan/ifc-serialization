@@ -22,59 +22,46 @@ static getSizePrefixedRootAsRelation(bb:flatbuffers.ByteBuffer, obj?:Relation):R
   return (obj || new Relation()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-expressId():number {
+name():string|null
+name(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+name(optionalEncoding?:any):string|Uint8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 4);
-  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
-isDecomposedBy(index: number):number|null {
+value(index: number):number|null {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.readInt32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
 }
 
-isDecomposedByLength():number {
+valueLength():number {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
-isDecomposedByArray():Int32Array|null {
+valueArray():Int32Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 6);
-  return offset ? new Int32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
-}
-
-decomposes(index: number):number|null {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
-  return offset ? this.bb!.readInt32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
-}
-
-decomposesLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
-  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
-}
-
-decomposesArray():Int32Array|null {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? new Int32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }
 
 static startRelation(builder:flatbuffers.Builder) {
-  builder.startObject(3);
+  builder.startObject(2);
 }
 
-static addExpressId(builder:flatbuffers.Builder, expressId:number) {
-  builder.addFieldInt32(0, expressId, 0);
+static addName(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(0, nameOffset, 0);
 }
 
-static addIsDecomposedBy(builder:flatbuffers.Builder, isDecomposedByOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(1, isDecomposedByOffset, 0);
+static addValue(builder:flatbuffers.Builder, valueOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(1, valueOffset, 0);
 }
 
-static createIsDecomposedByVector(builder:flatbuffers.Builder, data:number[]|Int32Array):flatbuffers.Offset;
+static createValueVector(builder:flatbuffers.Builder, data:number[]|Int32Array):flatbuffers.Offset;
 /**
  * @deprecated This Uint8Array overload will be removed in the future.
  */
-static createIsDecomposedByVector(builder:flatbuffers.Builder, data:number[]|Uint8Array):flatbuffers.Offset;
-static createIsDecomposedByVector(builder:flatbuffers.Builder, data:number[]|Int32Array|Uint8Array):flatbuffers.Offset {
+static createValueVector(builder:flatbuffers.Builder, data:number[]|Uint8Array):flatbuffers.Offset;
+static createValueVector(builder:flatbuffers.Builder, data:number[]|Int32Array|Uint8Array):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addInt32(data[i]!);
@@ -82,28 +69,7 @@ static createIsDecomposedByVector(builder:flatbuffers.Builder, data:number[]|Int
   return builder.endVector();
 }
 
-static startIsDecomposedByVector(builder:flatbuffers.Builder, numElems:number) {
-  builder.startVector(4, numElems, 4);
-}
-
-static addDecomposes(builder:flatbuffers.Builder, decomposesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(2, decomposesOffset, 0);
-}
-
-static createDecomposesVector(builder:flatbuffers.Builder, data:number[]|Int32Array):flatbuffers.Offset;
-/**
- * @deprecated This Uint8Array overload will be removed in the future.
- */
-static createDecomposesVector(builder:flatbuffers.Builder, data:number[]|Uint8Array):flatbuffers.Offset;
-static createDecomposesVector(builder:flatbuffers.Builder, data:number[]|Int32Array|Uint8Array):flatbuffers.Offset {
-  builder.startVector(4, data.length, 4);
-  for (let i = data.length - 1; i >= 0; i--) {
-    builder.addInt32(data[i]!);
-  }
-  return builder.endVector();
-}
-
-static startDecomposesVector(builder:flatbuffers.Builder, numElems:number) {
+static startValueVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
@@ -112,11 +78,10 @@ static endRelation(builder:flatbuffers.Builder):flatbuffers.Offset {
   return offset;
 }
 
-static createRelation(builder:flatbuffers.Builder, expressId:number, isDecomposedByOffset:flatbuffers.Offset, decomposesOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createRelation(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset, valueOffset:flatbuffers.Offset):flatbuffers.Offset {
   Relation.startRelation(builder);
-  Relation.addExpressId(builder, expressId);
-  Relation.addIsDecomposedBy(builder, isDecomposedByOffset);
-  Relation.addDecomposes(builder, decomposesOffset);
+  Relation.addName(builder, nameOffset);
+  Relation.addValue(builder, valueOffset);
   return Relation.endRelation(builder);
 }
 }

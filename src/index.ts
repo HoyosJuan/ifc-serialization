@@ -2,8 +2,10 @@ import * as fs from "fs"
 import * as fb from "flatbuffers"
 import * as IFC from "./ifc/entities"
 import * as WEBIFC from "web-ifc"
+import * as GRAPH from "graphql"
+import { Data } from "./Data"
 
-// Things that lower the size:
+// Things that lowers the size:
 // 1. Exclude the relation entities.
 // 2. Use a shared string.
 
@@ -12,9 +14,14 @@ import * as WEBIFC from "web-ifc"
 
 // Things to try
 // 1. Exclude the expressID and include null in the array positions where there is no entity.
-// 2. Do a different serialization for IfcPropertySingleValue
+// 2. Define combinations of attribute values that can be repeated a lot (define a "combinator" logic)
+// 2.1. Name and NominalValue for IfcPropertySingleValue
+// 2.2. Name and {Type}Value for IfcQuantity{Type} (IfcQuantityArea, IfcQuantityVolume, etc)
+// 2.2. Name and ObjectType for IfcObject (maybe not quite often?)
+// 2.3. ObjectType and PredefinedType for IfcElementType
+  
 
-const ifcQuantities = new Set<number>([
+const qtoEntities = new Set<number>([
   WEBIFC.IFCQUANTITYAREA,
   WEBIFC.IFCQUANTITYCOUNT,
   WEBIFC.IFCQUANTITYLENGTH,
@@ -24,100 +31,32 @@ const ifcQuantities = new Set<number>([
   WEBIFC.IFCQUANTITYWEIGHT,
 ])
 
+const materialEntities = new Set<number>([
+  WEBIFC.IFCMATERIAL,
+  WEBIFC.IFCMATERIALCONSTITUENT,
+  WEBIFC.IFCMATERIALCONSTITUENTSET,
+  WEBIFC.IFCMATERIALLAYER,
+  WEBIFC.IFCMATERIALLAYERSET,
+  WEBIFC.IFCMATERIALPROFILE,
+  WEBIFC.IFCMATERIALPROFILESET,
+])
+
 const classesToInclude = new Set<number>([
   WEBIFC.IFCPROPERTYSET,
   WEBIFC.IFCPROPERTYSINGLEVALUE,
   WEBIFC.IFCELEMENTQUANTITY,
-  ...ifcQuantities
-  // WEBIFC.IFCMATERIAL,
-  // WEBIFC.IFCMATERIALCONSTITUENT,
-  // WEBIFC.IFCMATERIALCONSTITUENTSET,
-  // WEBIFC.IFCMATERIALLAYER,
-  // WEBIFC.IFCMATERIALLAYERSET,
-  // WEBIFC.IFCMATERIALPROFILE,
-  // WEBIFC.IFCMATERIALPROFILESET,
+  ...qtoEntities,
+  ...materialEntities
 ])
 
-// interface WebIfcEntities {
-//   [id: string]: {
-//     expressID: number,
-//     type: number,
-//     [attr: string]:
-//       | number
-//       | null
-//       | { value: string | number | boolean, type: number, name?: string }
-//   }
-// }
-
-// const entities: WebIfcEntities = {
-//   "1": {
-//     "expressID": 1,
-//     "type": 4251960020,
-//     "Id": null,
-//     "Name": { "value": "Autodesk Revit 2021 (ESP)", "type": 1, "name": "IFCLABEL" },
-//     "Description": null,
-//     "Roles": null,
-//     "Addresses": null
-//   },
-//   "5": {
-//     "expressID": 5,
-//     "type": 639542469,
-//     "ApplicationDeveloper": { "value": 1, "type": 5 },
-//     "Version": { "value": "2021", "type": 1, "name": "IFCLABEL" },
-//     "ApplicationFullName": { "value": "Autodesk Revit 2021 (ESP)", "type": 1, "name": "IFCLABEL" },
-//     "ApplicationIdentifier": { "value": "Revit", "type": 1, "name": "IFCIDENTIFIER" }
-//   },
-//   "47": {
-//     "expressID": 47,
-//     "type": 2597039031,
-//     "ValueComponent": {
-//       "type": 4,
-//       "name": "IFCRATIOMEASURE",
-//       "value": 0.0174532925199433
-//     },
-//     "UnitComponent": {
-//       "value": 45,
-//       "type": 5
-//     }
-//   },
-//   "48": {
-//     "expressID": 48,
-//     "type": 2889183280,
-//     "Dimensions": {
-//       "value": 46,
-//       "type": 5
-//     },
-//     "UnitType": {
-//       "type": 3,
-//       "value": "PLANEANGLEUNIT"
-//     },
-//     "Name": {
-//       "value": "DEGREE",
-//       "type": 1,
-//       "name": "IFCLABEL"
-//     },
-//     "ConversionFactor": {
-//       "value": 47,
-//       "type": 5
-//     }
-//   },
-// }
+const attrsToExclude = new Set<string>([
+  "Representation",
+  "ObjectPlacement"
+])
 
 const builder = new fb.Builder(1024)
 
-const serializePropValue = (attrs: any) => {
-  const valueKey = Object.keys(attrs).find(attr => attr.endsWith("Value"))
-  if (!(valueKey && attrs[valueKey] && attrs.Name)) return null
-  const attrArray = [attrs.Name.value, attrs[valueKey].value]
-  const value = builder.createSharedString(JSON.stringify(attrArray))
-  return value
-}
-
 const serialize = async (path: string, name: string) => {
-  const start = performance.now()
-
-  const classesProcessed: Record<string, number> = {}
-
   const ifcApi = new WEBIFC.IfcAPI()
   await ifcApi.Init()
 
@@ -127,136 +66,153 @@ const serialize = async (path: string, name: string) => {
   const modelID = ifcApi.OpenModel(ifcBuffer)
 
   const entities: number[] = []
-  const types: bigint[] = []
-  const values: number[] = []
+  const expressIDs: number[] = []
+  const types: number[] = []
+  const rels: number[] = []
 
   const modelClasses = ifcApi.GetAllTypesOfModel(modelID).map(entry => entry.typeID)
   const toProcess = modelClasses.filter(type => ifcApi.IsIfcElement(type) || classesToInclude.has(type))
+  const relsMap: Record<number, { [name: string]: number[] }> = {}
   
   for (const entityClass of toProcess) {
     const classEntities = ifcApi.GetLineIDsWithType(modelID, entityClass)
     const classEntitiesCount = classEntities.size();
     if (classEntitiesCount === 0) continue
-    const className = ifcApi.GetNameFromTypeCode(entityClass)
-    classesProcessed[className] = classEntities.size();
 
-    
+    const processedIDs: number[] = []
+
     for (let index = 0; index < classEntities.size(); index++) {
       const expressID = classEntities.get(index);
       const attrs = await ifcApi.properties.getItemProperties(modelID, expressID) as Record<string, any>
       if (!attrs) continue
       
-      if (ifcQuantities.has(entityClass) || entityClass === WEBIFC.IFCPROPERTYSINGLEVALUE) {
-        const value = serializePropValue(attrs)
-        if (value !== null) values.push(value)
-        continue
-      }
+      const attributes: number[] = []
 
-      const list: number[] = []
       for (const [attrName, attrValue] of Object.entries(attrs)) {
+        if (attrsToExclude.has(attrName)) continue
         if (attrValue === null || attrValue === undefined) continue
-        if (Array.isArray(attrValue)) continue // omit array attributes by now
-
-        let typeValue: number | undefined
-        let dataNameValue: string | undefined
-        let stringValue: string | undefined
-        let floatValue: number | undefined
-        let intValue: number | undefined
-
-        if (typeof attrValue === "number") {
-          if (attrName === "expressID") intValue = attrValue
-          if (attrName === "type") {
-            intValue = types.indexOf(BigInt(attrValue))
-            if (intValue === -1) intValue = types.push(BigInt(attrValue)) - 1
-          }
-        } else {
-          const { value, type, name } = attrValue
-          typeValue = type
-          dataNameValue = name
-          if ((type === 1 || type === 2 || type === 3) && typeof value === "string") {
-            stringValue = value
-          } else if (type === 5 && typeof value === "number") {
-            intValue = value
-          } else if (type === 4 && typeof value === "number") {
-            floatValue = value
-          }
+        if (Array.isArray(attrValue)) {
+          const handles = attrValue.filter(handle => handle.type === 5)
+          const ids = handles.map(handle => handle.value)
+          if (!relsMap[expressID]) relsMap[expressID] = {}
+          if (!relsMap[expressID][attrName]) relsMap[expressID][attrName] = []
+          relsMap[expressID][attrName].push(...ids)
+          continue
         }
 
-        const attrArray: any[] = []
-        // if (typeValue !== undefined) attrArray[0] = typeValue
-        // if (dataNameValue) attrArray[1] = dataNameValue
-        if (stringValue) attrArray[2] = stringValue
-        if (intValue !== undefined) attrArray[3] = intValue
-        if (floatValue !== undefined) attrArray[4] = floatValue
+        if (typeof attrValue === "number") continue
 
-        // Serialization
-        const nameBuffer = builder.createSharedString(attrName)
-        const value = builder.createSharedString(JSON.stringify(attrArray))
-        IFC.Attribute.startAttribute(builder)
-        IFC.Attribute.addName(builder, nameBuffer)
-        IFC.Attribute.addValue(builder, value)
-        const attr = IFC.Attribute.endAttribute(builder)
-        list.push(attr)
+        const { value, type } = attrValue as { value: string | boolean | number; type: number; name?: string }
+
+        if (type === 5) {
+          if (typeof value !== "number") continue
+          if (!relsMap[expressID]) relsMap[expressID] = {}
+          if (!relsMap[expressID][attrName]) relsMap[expressID][attrName] = []
+          relsMap[expressID][attrName].push(value)
+        } else {
+          const hash = JSON.stringify([attrName, value])
+          const attrOffset = builder.createSharedString(hash)
+          attributes.push(attrOffset)
+        }
       }
-      const entityAttrs = IFC.Entity.createAttrsVector(builder, list)
+
+      const attributesVector = IFC.Entity.createAttrsVector(builder, attributes)
       IFC.Entity.startEntity(builder)
-      IFC.Entity.addAttrs(builder, entityAttrs)
+      IFC.Entity.addAttrs(builder, attributesVector)
       const entity = IFC.Entity.endEntity(builder)
-      entities.push(entity) - 1       
+      entities.push(entity)
+      expressIDs.push(expressID)
+      processedIDs.push(expressID)
+    }
+
+    const idsOffset = IFC.Types.createEntitiesVector(builder, processedIDs)
+    IFC.Types.startTypes(builder)
+    IFC.Types.addType(builder, BigInt(entityClass))
+    IFC.Types.addEntities(builder, idsOffset)
+    const typeOffset = IFC.Types.endTypes(builder)
+    types.push(typeOffset)
+  }
+
+  const relsToProcess = [WEBIFC.IFCRELDEFINESBYPROPERTIES]
+  for (const entityClass of relsToProcess) {
+    const classEntities = ifcApi.GetLineIDsWithType(modelID, entityClass)
+    const classEntitiesCount = classEntities.size();
+    if (classEntitiesCount === 0) continue
+    for (let index = 0; index < classEntities.size(); index++) {
+      const expressID = classEntities.get(index);
+      const attrs = await ifcApi.properties.getItemProperties(modelID, expressID) as Record<string, any>
+      if (!attrs) continue
+      const attrKeys = Object.keys(attrs)
+      const relatingKey = attrKeys.find(attr => attr.startsWith("Relating"))
+      const relatedKey = attrKeys.find(attr => attr.startsWith("Related"))
+      if (!(relatingKey && relatedKey)) continue
+      const relatingID = attrs[relatingKey].value
+      const relatedIDs = attrs[relatedKey].map(({ value }: { value: number }) => value)
+      if (!relsMap[relatingID]) relsMap[relatingID] = {}
+      if (!relsMap[relatingID].DefinesOccurence) relsMap[relatingID].DefinesOccurence = []
+      relsMap[relatingID].DefinesOccurence.push(...relatedIDs)
+      for (const relatedID of relatedIDs) {
+        if (!relsMap[relatedID]) relsMap[relatedID] = {}
+        if (!relsMap[relatedID].IsDefinedBy) relsMap[relatedID].IsDefinedBy = []
+        relsMap[relatedID].IsDefinedBy.push(relatingID)
+      }
     }
   }
+
+  for (const expressID in relsMap) {
+    const entityRels = relsMap[expressID]
+    const definitions: number[] = []
+    for (const entry of Object.entries(entityRels)) {
+      const hash = JSON.stringify(entry)
+      const offset = builder.createSharedString(hash)
+      definitions.push(offset)
+    }
+    const attributesVector = IFC.Rel.createDefsVector(builder, definitions)
+    IFC.Rel.startRel(builder)
+    IFC.Rel.addDefs(builder, attributesVector)
+    const rel = IFC.Rel.endRel(builder)
+    rels.push(rel)
+  }
       
-  const entitiesVector = IFC.Data.createEntitiesVector(builder, entities as number[])
+  const ids = Object.keys(relsMap).map(id => Number(id))
+  const entitiesVector = IFC.Data.createEntitiesVector(builder, entities)
+  const idsVector = IFC.Data.createIdsVector(builder, expressIDs)
   const typesVector = IFC.Data.createTypesVector(builder, types)
-  const valuesVector = IFC.Data.createValuesVector(builder, values)
+  const relIndicesVector = IFC.Data.createRelIndicesVector(builder, ids)
+  const relsVector = IFC.Data.createRelsVector(builder, rels)
   IFC.Data.startData(builder)
   IFC.Data.addEntities(builder, entitiesVector)
+  IFC.Data.addIds(builder, idsVector)
   IFC.Data.addTypes(builder, typesVector)
-  IFC.Data.addValues(builder, valuesVector)
+  IFC.Data.addRelIndices(builder, relIndicesVector)
+  IFC.Data.addRels(builder, relsVector)
   const outData = IFC.Data.endData(builder)
 
   builder.finish(outData)
 
   const outBytes = builder.asUint8Array()
   fs.writeFileSync(`${name}.bin`, outBytes)
-  console.log(`${(performance.now() - start) / 1000} s`)
-
-  console.log(classesProcessed)
 }
 
-serialize("large.ifc", "large")
+const run = async (forceSerialize: boolean) => {
+  const name = "large"
+  if (forceSerialize) {
+    const start = performance.now()
+    await serialize(`${name}.ifc`, name)
+    console.log("Serialization took: ", `${(performance.now() - start) / 1000} s`)
+  }
 
-// Deserialization
-// const inBytes = new Uint8Array(fs.readFileSync("entities.bin"))
-// const inBuffer = new fb.ByteBuffer(inBytes)
-// const inData = IFC.Data.getRootAsData(inBuffer)
+  const bytes = new Uint8Array(fs.readFileSync(`${name}.bin`))
+  const ifc = new Data(bytes)
+  // console.log(await ifc.getAllClassNames())
+  const ids = ifc.getAllEntitiesOfClass(WEBIFC.IFCSPACE).slice(0,1)
+  for (const id of ids) {
+    const attrs = ifc.getEntityAttributes(id, {includeRels: true})
+    console.log(attrs)
+  }
 
-// const getAttrs = (expressID: number) => {
-// const entity = inData.entities(expressID);
-//   if (!(entity && entity.attrsLength() !== 0)) return null
-//   const attrs: Record<string, any> = {}
-//   for (let j = 0; j < entity.attrsLength(); j++) {
-//     const attr = entity.attrs(j);
-//     const name = attr?.name()
-//     const value = attr?.value()
-//     if (!(attr && name && value)) continue
-//     const [type, dataName, stringValue, intValue, floatValue] = JSON.parse(value)
-//     if (name === "expressID") {
-//       attrs.expressID = intValue
-//     } else if (name === "type") {
-//       const type = inData.types(intValue)
-//       if (type !== null) attrs.type = Number(type)
-//     } else {
-//       let value = stringValue
-//       if (floatValue !== undefined) value = floatValue
-//       if (intValue !== undefined) value = intValue
-//       if (value === undefined) continue
-//       attrs[name] = { value }
-//       if (type !== null) attrs[name].type = type
-//       if (dataName) attrs[name].name = dataName
-//     }
-//   }
-//   return attrs
-// }
+  console.log(ifc.getEntityAttributes(16250, { includeRels: true }))
+  console.log(ifc.getEntityAttributes(16248, { includeRels: true }))
+}
 
-// console.log(getAttrs(112))
+run(false)

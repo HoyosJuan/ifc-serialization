@@ -4,9 +4,6 @@
 
 import * as flatbuffers from 'flatbuffers';
 
-import { Attribute } from '../../ifc/entities/attribute.js';
-
-
 export class Entity {
   bb: flatbuffers.ByteBuffer|null = null;
   bb_pos = 0;
@@ -25,9 +22,11 @@ static getSizePrefixedRootAsEntity(bb:flatbuffers.ByteBuffer, obj?:Entity):Entit
   return (obj || new Entity()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-attrs(index: number, obj?:Attribute):Attribute|null {
+attrs(index: number):string
+attrs(index: number,optionalEncoding:flatbuffers.Encoding):string|Uint8Array
+attrs(index: number,optionalEncoding?:any):string|Uint8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 4);
-  return offset ? (obj || new Attribute()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
+  return offset ? this.bb!.__string(this.bb!.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
 }
 
 attrsLength():number {

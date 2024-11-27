@@ -1,0 +1,24 @@
+namespace IFC.Entities;
+
+table Entity {
+  attrs: [string];
+}
+
+table Types {
+  type: int64;
+  entities: [int];
+}
+
+table Rel {
+  defs: [string];
+}
+
+table Data {
+  ids: [int]; // this array makes very easy to lookup any entity attributes in Data.entities
+  relIndices: [int]; // this array makes very easy to lookup any entity relations in Data.rels
+  types: [Types];
+  entities: [Entity];
+  rels: [Rel];
+}
+
+root_type Data;
