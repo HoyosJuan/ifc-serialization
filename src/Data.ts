@@ -2,16 +2,31 @@ import * as IFC from "./ifc/entities"
 import * as fb from "flatbuffers"
 import * as WEBIFC from "web-ifc"
 
-type Rel = "IsDefinedBy"
+interface SpatialStructure {
+  type?: number;
+  id?: number;
+  children?: SpatialStructure[]
+}
 
 export class Data {
   private _data: IFC.Data
-  private _classesIndex: Record<number, number> = {};
+  private _ci: Record<number, number> | null = null;
+
+  private get _classesIndex() {
+    if (!this._ci) this._ci = this.initializeClassesIndex()
+    return this._ci
+  }
+
+  private _gi: Record<string, number> | null = null
+
+  private get _guidsIndex() {
+    if (!this._gi) this._gi = this.initializeGuidsIndex()
+    return this._gi
+  }
   
   constructor(buffer: Uint8Array) {
     const inBuffer = new fb.ByteBuffer(buffer)
     this._data = IFC.Data.getRootAsData(inBuffer)
-    this._classesIndex = this.initializeClassesIndex()
   }
 
   private initializeClassesIndex() {
@@ -25,8 +40,29 @@ export class Data {
     return indexation
   }
 
-  getEntityAttributes(expressID: number, config: { includeRels: boolean } = { includeRels: false }) {
+  private initializeGuidsIndex() {
+    const indexation: Record<string, number> = {}
+    for (let i = 0; i < this._data.guidsLength(); i++) {
+      const expressID = this._data.guidIndices(i)
+      if (!expressID) continue
+      const guid = this._data.guids(i);
+      indexation[guid] = expressID
+    }
+    return indexation
+  }
+
+  getEntityAttributes(id: number | string, config: { includeRels: boolean } = { includeRels: false }) {
     let data: Record<string, string | boolean | number | number[]> = {}
+    const expressID = typeof id === "number" ? id : this._guidsIndex[id]
+    if (typeof id === "string") {
+      data.GlobalId = id
+    } else {
+      const guidIndex = this._data.guidIndicesArray()?.indexOf(expressID)
+      if (guidIndex) {
+        const guid = this._data.guids(guidIndex)
+        if (guid) data.GlobalId = guid
+      }
+    }
     const attrsIndex = this._data.idsArray()?.indexOf(expressID)
     if (attrsIndex !== undefined && attrsIndex !== -1) {
       const entity = this._data.entities(attrsIndex);
@@ -53,6 +89,7 @@ export class Data {
         data = {...data, ...rels}
       }
     }
+    if (Object.keys(data).length === 0) return null
     return data
   }
 
@@ -77,6 +114,69 @@ export class Data {
       data[name] = value
     }
     return data
+  }
+
+  private getEntityDecomposition(expressID: number, inverseAttributes: string[]) {
+    const item: SpatialStructure = {
+      id: expressID
+    };
+
+    for (const attrName of inverseAttributes) {
+      const relations = this.getEntityRelations(expressID)?.[attrName];
+      if (!relations) continue;
+      if (!item.children) item.children = [];
+      
+      const entityGroups: {[type: number]: number[]} = {};
+      for (const id of relations) {
+        const entityClass = this.getEntityClass(id)
+        if (!entityClass) continue
+        if (!entityGroups[entityClass]) entityGroups[entityClass] = []
+        entityGroups[entityClass].push(id)
+      }
+
+      for (const type in entityGroups) {
+        const entities = entityGroups[type];
+        const typeItem: SpatialStructure = {
+          type: Number(type),
+          children: entities.map(
+            id => this.getEntityDecomposition(id, inverseAttributes)
+          )
+        }
+        item.children.push(typeItem)
+      }
+    }
+
+    return item;
+  }
+
+  getSpatialTree() {
+    const type = WEBIFC.IFCPROJECT
+    const tree: SpatialStructure = {
+      type: type,
+      children: this.getAllEntitiesOfClass(type).map(
+        id => this.getEntityDecomposition(id, ["IsDecomposedBy", "ContainsElements"])
+      )
+    }
+    return tree
+  }
+
+  getEntityClass(expressID: number) {
+    let classType: number | null = null
+    for (let i = 0; i < this._data.typesLength(); i++) {
+      const element = this._data.types(i);
+      if (!element) continue
+      if (element.entitiesArray()?.includes(expressID)) {
+        classType = Number(element.type())
+        break
+      };
+    }
+    return classType
+  }
+
+  // Free the memory from internal indexations used to process things faster.
+  cleanIndexations() {
+    this._ci = null
+    this._gi = null
   }
 
   async getAllClassNames() {

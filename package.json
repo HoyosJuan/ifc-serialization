@@ -5,7 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "node": "tsc && node dist/index.js",
-    "flatbuffers": "cd ./src && flatc --ts entities.fbs --no-warnings"
+    "flatbuffers": "cd ./src && flatc --ts schema.fbs --no-warnings"
   },
   "keywords": [],
   "author": "",
@@ -13,6 +13,7 @@
   "description": "",
   "dependencies": {
     "flatbuffers": "^24.3.25",
+    "graphql": "^16.9.0",
     "web-ifc": "0.0.65"
   },
   "devDependencies": {

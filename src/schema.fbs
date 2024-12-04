@@ -1,5 +1,11 @@
 namespace IFC.Entities;
 
+table SpatialStructure {
+  type: int64;
+  id: int;
+  children: [SpatialStructure];
+}
+
 table Entity {
   attrs: [string];
 }
@@ -14,11 +20,15 @@ table Rel {
 }
 
 table Data {
-  ids: [int]; // this array makes very easy to lookup any entity attributes in Data.entities
-  relIndices: [int]; // this array makes very easy to lookup any entity relations in Data.rels
+  schema: string;
   types: [Types];
+  ids: [int];
   entities: [Entity];
+  relIndices: [int];
   rels: [Rel];
+  guidIndices: [int];
+  guids: [string];
+  spatialStructure: SpatialStructure;
 }
 
 root_type Data;

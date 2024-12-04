@@ -6,6 +6,7 @@ import * as flatbuffers from 'flatbuffers';
 
 import { Entity } from '../../ifc/entities/entity.js';
 import { Rel } from '../../ifc/entities/rel.js';
+import { SpatialStructure } from '../../ifc/entities/spatial-structure.js';
 import { Types } from '../../ifc/entities/types.js';
 
 
@@ -27,54 +28,54 @@ static getSizePrefixedRootAsData(bb:flatbuffers.ByteBuffer, obj?:Data):Data {
   return (obj || new Data()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-ids(index: number):number|null {
-  const offset = this.bb!.__offset(this.bb_pos, 4);
-  return offset ? this.bb!.readInt32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
-}
-
-idsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 4);
-  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
-}
-
-idsArray():Int32Array|null {
-  const offset = this.bb!.__offset(this.bb_pos, 4);
-  return offset ? new Int32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
-}
-
-relIndices(index: number):number|null {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
-  return offset ? this.bb!.readInt32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
-}
-
-relIndicesLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
-  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
-}
-
-relIndicesArray():Int32Array|null {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
-  return offset ? new Int32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
-}
-
 types(index: number, obj?:Types):Types|null {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
+  const offset = this.bb!.__offset(this.bb_pos, 4);
   return offset ? (obj || new Types()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 typesLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
+  const offset = this.bb!.__offset(this.bb_pos, 4);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
+ids(index: number):number|null {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? this.bb!.readInt32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
+}
+
+idsLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+idsArray():Int32Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? new Int32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
+}
+
 entities(index: number, obj?:Entity):Entity|null {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? (obj || new Entity()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 entitiesLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+relIndices(index: number):number|null {
+  const offset = this.bb!.__offset(this.bb_pos, 10);
+  return offset ? this.bb!.readInt32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
+}
+
+relIndicesLength():number {
   const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+relIndicesArray():Int32Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 10);
+  return offset ? new Int32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }
 
 rels(index: number, obj?:Rel):Rel|null {
@@ -87,12 +88,60 @@ relsLength():number {
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
+guidIndices(index: number):number|null {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? this.bb!.readInt32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
+}
+
+guidIndicesLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+guidIndicesArray():Int32Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? new Int32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
+}
+
+guids(index: number):string
+guids(index: number,optionalEncoding:flatbuffers.Encoding):string|Uint8Array
+guids(index: number,optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+  return offset ? this.bb!.__string(this.bb!.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
+}
+
+guidsLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+spatialStructure(obj?:SpatialStructure):SpatialStructure|null {
+  const offset = this.bb!.__offset(this.bb_pos, 18);
+  return offset ? (obj || new SpatialStructure()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
 static startData(builder:flatbuffers.Builder) {
-  builder.startObject(5);
+  builder.startObject(8);
+}
+
+static addTypes(builder:flatbuffers.Builder, typesOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(0, typesOffset, 0);
+}
+
+static createTypesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addOffset(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startTypesVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
 }
 
 static addIds(builder:flatbuffers.Builder, idsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(0, idsOffset, 0);
+  builder.addFieldOffset(1, idsOffset, 0);
 }
 
 static createIdsVector(builder:flatbuffers.Builder, data:number[]|Int32Array):flatbuffers.Offset;
@@ -112,8 +161,24 @@ static startIdsVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
+static addEntities(builder:flatbuffers.Builder, entitiesOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(2, entitiesOffset, 0);
+}
+
+static createEntitiesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addOffset(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startEntitiesVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
+}
+
 static addRelIndices(builder:flatbuffers.Builder, relIndicesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(1, relIndicesOffset, 0);
+  builder.addFieldOffset(3, relIndicesOffset, 0);
 }
 
 static createRelIndicesVector(builder:flatbuffers.Builder, data:number[]|Int32Array):flatbuffers.Offset;
@@ -133,38 +198,6 @@ static startRelIndicesVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static addTypes(builder:flatbuffers.Builder, typesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(2, typesOffset, 0);
-}
-
-static createTypesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
-  builder.startVector(4, data.length, 4);
-  for (let i = data.length - 1; i >= 0; i--) {
-    builder.addOffset(data[i]!);
-  }
-  return builder.endVector();
-}
-
-static startTypesVector(builder:flatbuffers.Builder, numElems:number) {
-  builder.startVector(4, numElems, 4);
-}
-
-static addEntities(builder:flatbuffers.Builder, entitiesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(3, entitiesOffset, 0);
-}
-
-static createEntitiesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
-  builder.startVector(4, data.length, 4);
-  for (let i = data.length - 1; i >= 0; i--) {
-    builder.addOffset(data[i]!);
-  }
-  return builder.endVector();
-}
-
-static startEntitiesVector(builder:flatbuffers.Builder, numElems:number) {
-  builder.startVector(4, numElems, 4);
-}
-
 static addRels(builder:flatbuffers.Builder, relsOffset:flatbuffers.Offset) {
   builder.addFieldOffset(4, relsOffset, 0);
 }
@@ -181,6 +214,47 @@ static startRelsVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
+static addGuidIndices(builder:flatbuffers.Builder, guidIndicesOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(5, guidIndicesOffset, 0);
+}
+
+static createGuidIndicesVector(builder:flatbuffers.Builder, data:number[]|Int32Array):flatbuffers.Offset;
+/**
+ * @deprecated This Uint8Array overload will be removed in the future.
+ */
+static createGuidIndicesVector(builder:flatbuffers.Builder, data:number[]|Uint8Array):flatbuffers.Offset;
+static createGuidIndicesVector(builder:flatbuffers.Builder, data:number[]|Int32Array|Uint8Array):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addInt32(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startGuidIndicesVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
+}
+
+static addGuids(builder:flatbuffers.Builder, guidsOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(6, guidsOffset, 0);
+}
+
+static createGuidsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addOffset(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startGuidsVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
+}
+
+static addSpatialStructure(builder:flatbuffers.Builder, spatialStructureOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(7, spatialStructureOffset, 0);
+}
+
 static endData(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
@@ -194,13 +268,4 @@ static finishSizePrefixedDataBuffer(builder:flatbuffers.Builder, offset:flatbuff
   builder.finish(offset, undefined, true);
 }
 
-static createData(builder:flatbuffers.Builder, idsOffset:flatbuffers.Offset, relIndicesOffset:flatbuffers.Offset, typesOffset:flatbuffers.Offset, entitiesOffset:flatbuffers.Offset, relsOffset:flatbuffers.Offset):flatbuffers.Offset {
-  Data.startData(builder);
-  Data.addIds(builder, idsOffset);
-  Data.addRelIndices(builder, relIndicesOffset);
-  Data.addTypes(builder, typesOffset);
-  Data.addEntities(builder, entitiesOffset);
-  Data.addRels(builder, relsOffset);
-  return Data.endData(builder);
-}
 }
