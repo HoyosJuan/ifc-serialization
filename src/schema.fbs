@@ -1,12 +1,17 @@
 namespace IFC.Entities;
 
-table SpatialStructure {
-  type: int64;
+struct AttrIndex {
   id: int;
+  type: int64;
+}
+
+table SpatialStructure {
+  data: AttrIndex;
   children: [SpatialStructure];
 }
 
 table Entity {
+  indexing: [string];
   attrs: [string];
 }
 

@@ -23,6 +23,18 @@ export class Data {
     if (!this._gi) this._gi = this.initializeGuidsIndex()
     return this._gi
   }
+
+  private _api: WEBIFC.IfcAPI | null = null
+  
+  private async getIfcApi() {
+    if (!this._api) {
+      const ifcApi = new WEBIFC.IfcAPI()
+      await ifcApi.Init()
+      this._api = ifcApi
+      ifcApi.CreateModel({schema: WEBIFC.Schemas.IFC4})
+    }
+    return this._api
+  }
   
   constructor(buffer: Uint8Array) {
     const inBuffer = new fb.ByteBuffer(buffer)
@@ -51,46 +63,54 @@ export class Data {
     return indexation
   }
 
-  getEntityAttributes(id: number | string, config: { includeRels: boolean } = { includeRels: false }) {
-    let data: Record<string, string | boolean | number | number[]> = {}
+  async getEntityAttributes(id: number | string, config: { includeRels: boolean } = { includeRels: false }) {
+    const ifcApi = await this.getIfcApi()
     const expressID = typeof id === "number" ? id : this._guidsIndex[id]
+    const attrsIndex = this._data.idsArray()?.indexOf(expressID)
+    const classType = this.getEntityClass(expressID)
+    if (!(classType && attrsIndex !== undefined && attrsIndex !== -1)) return null
+    const bufferEntity = this._data.entities(attrsIndex);
+    if (!bufferEntity) return null
+    const attrs = []
     if (typeof id === "string") {
-      data.GlobalId = id
+      const ifcType = ifcApi.CreateIfcType(0, WEBIFC.IFCGLOBALLYUNIQUEID, id)
+      attrs[0] = ifcType
     } else {
       const guidIndex = this._data.guidIndicesArray()?.indexOf(expressID)
-      if (guidIndex) {
+      if (guidIndex !== undefined) {
         const guid = this._data.guids(guidIndex)
-        if (guid) data.GlobalId = guid
-      }
-    }
-    const attrsIndex = this._data.idsArray()?.indexOf(expressID)
-    if (attrsIndex !== undefined && attrsIndex !== -1) {
-      const entity = this._data.entities(attrsIndex);
-      if (entity) {
-        for (let j = 0; j < entity.attrsLength(); j++) {
-          const attr = entity.attrs(j);
-          if (!attr) continue
-          const [name, value] = JSON.parse(attr)
-          data[name] = value
+        if (guid) {
+          const ifcType = ifcApi.CreateIfcType(0, WEBIFC.IFCGLOBALLYUNIQUEID, guid)
+          attrs[0] = ifcType
         }
       }
     }
-    const { includeRels } = config
-    if (includeRels) {
-      const rels = this.getEntityRelations(expressID)
-      if (rels) {
-        // for (const [rel, ids] of Object.entries(rels)) {
-        //   // console.log(rel, expressID, ids)
-        //   const expressIDs = ids.filter(id => id !== expressID)
-        //   const attrs = expressIDs.map(id => this.getEntityAttributes(id)).filter(item => item)
-        //   // @ts-ignore
-        //   data[rel] = attrs
-        // }
-        data = {...data, ...rels}
-      }
+    for (let j = 0; j < bufferEntity.attrsLength(); j++) {
+      const attr = bufferEntity.attrs(j);
+      if (!attr) continue
+      const [index, value, type] = JSON.parse(attr)
+      if (type === undefined) continue
+      // console.log(type, ifcApi.GetNameFromTypeCode(type))
+      attrs[index] = ifcApi.CreateIfcType(0, type, value)
     }
-    if (Object.keys(data).length === 0) return null
-    return data
+    const ifcEntity = ifcApi.CreateIfcEntity(0, classType, ...attrs)
+    ifcEntity.expressID = expressID
+    return ifcEntity
+    // const { includeRels } = config
+    // if (includeRels) {
+    //   const rels = this.getEntityRelations(expressID)
+    //   if (rels) {
+    //     // for (const [rel, ids] of Object.entries(rels)) {
+    //     //   // console.log(rel, expressID, ids)
+    //     //   const expressIDs = ids.filter(id => id !== expressID)
+    //     //   const attrs = expressIDs.map(id => this.getEntityAttributes(id)).filter(item => item)
+    //     //   // @ts-ignore
+    //     //   data[rel] = attrs
+    //     // }
+    //     // ifcEntity = {...ifcEntity, ...rels}
+    //   }
+    // }
+    // if (Object.keys(ifcEntity).length === 0) return null
   }
 
   getAllEntitiesOfClass(classID: number) {

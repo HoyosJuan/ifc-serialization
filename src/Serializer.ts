@@ -123,6 +123,7 @@ export class Serializer {
 
     const entitiesToProcess = this.getEntitiesToProcess()
     const toProcess = modelClasses.filter(type => ifcApi.IsIfcElement(type) || entitiesToProcess.includes(type))
+    // const toProcess = modelClasses.filter(type => entitiesToProcess.includes(type))
     this._relationsMap = {}
 
     const builder = new fb.Builder(1024)
@@ -212,9 +213,13 @@ export class Serializer {
     const attrOffsets: number[] = []
     let guidOffset: number | null = null
 
+    let index = 0
     for (const [attrName, attrValue] of Object.entries(attrs)) {
-      if (this.attrsToExclude.has(attrName)) continue
-      if (attrValue === null || attrValue === undefined || typeof attrValue === "number") continue
+      if (typeof attrValue === "number") continue
+      if (this.attrsToExclude.has(attrName) || attrValue === null || attrValue === undefined) {
+        index++
+        continue
+      }
 
       // Array attributes are usually references to other entities
       // They need to be added as a relation
@@ -222,6 +227,7 @@ export class Serializer {
         const handles = attrValue.filter(handle => handle.type === 5)
         const ids = handles.map(handle => handle.value) as number[]
         this.addRelation(expressID, attrName, ...ids)
+        index++
         continue
       }
 
@@ -238,12 +244,19 @@ export class Serializer {
         if (attrName === "GlobalId" && typeof value === "string") {
           // As guids are always unique, is pointless to create a shared string
           guidOffset = builder.createString(value)
+          index++
           continue
         }
-        const hash = JSON.stringify([attrName, value])
+        const attrData = [index, value]
+        const { name } = attrValue as AttrValue
+        if (!name) console.log(attrName, attrValue)
+        if (name && (WEBIFC as any)[name]) attrData.push((WEBIFC as any)[name])
+        const hash = JSON.stringify(attrData)
         const attrOffset = builder.createSharedString(hash)
         attrOffsets.push(attrOffset)
       }
+
+      index++
     }
 
     return {attrOffsets, guidOffset}
