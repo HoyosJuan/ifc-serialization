@@ -5,7 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "node": "tsc && node dist/index.js",
-    "flatbuffers": "cd ./src && flatc --ts schema.fbs --no-warnings"
+    "flatbuffers": "cd ./src && flatc.exe --ts schema.fbs --no-warnings"
   },
   "keywords": [],
   "author": "",

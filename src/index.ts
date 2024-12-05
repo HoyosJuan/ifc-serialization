@@ -66,18 +66,26 @@ import { Serializer } from "./Serializer"
 const run = async (forceSerialize: boolean) => {
   const name = "medium"
   if (forceSerialize) {
+    const lastBinFile = fs.readFileSync(`${name}.bin`)
+    const previousSize = (lastBinFile.length / (1024 * 1024)).toFixed(3)
     const start = performance.now()
     const ifcFile = fs.readFileSync(`${name}.ifc`)
     const ifcBuffer = new Uint8Array(ifcFile.buffer)
     const serializer = new Serializer()
-    // serializer.classesToInclude = [{entities: [WEBIFC.IFCPROJECT], rels: []}]
+    // serializer.classesToInclude = [{entities: [WEBIFC.IFCSITE], rels: []}]
     const bytes = await serializer.process(ifcBuffer)
+    const executionTime = ((performance.now() - start) / 1000).toFixed(4)
     fs.writeFileSync(`${name}.bin`, bytes)
-    console.log("Serialization took: ", `${(performance.now() - start) / 1000} s`)
+    const newBinFile = fs.readFileSync(`${name}.bin`)
+    const newSize = (newBinFile.length / (1024 * 1024)).toFixed(3)
+    console.log("Serialization took:", `${executionTime}s`)
+    console.log("Old size:", `${previousSize}mb`)
+    console.log("New size:", `${newSize}mb`)
   }
 
   const bytes = new Uint8Array(fs.readFileSync(`${name}.bin`))
   const model = new Data(bytes)
+  // fs.writeFileSync(`${name}-tree.json`, JSON.stringify(model.spatialTree, null, 2))
 
   // const expressID = 91
   // const guid = "3pAqbahij0IxsrcNfJM9Y8"
@@ -99,6 +107,34 @@ const run = async (forceSerialize: boolean) => {
 
   // const ifcApi = new WEBIFC.IfcAPI()
   // await ifcApi.Init()
+
+  // @ts-ignore
+  // const site = new WEBIFC.IFC4.IfcSite(
+  //   null,
+  //   null,
+  //   null,
+  //   null,
+  //   null,
+  //   null,
+  //   null,
+  //   null,
+  //   null,
+  //   new WEBIFC.IFC4.IfcCompoundPlaneAngleMeasure([1, 2, 3]),
+  //   new WEBIFC.IFC4.IfcCompoundPlaneAngleMeasure([1, 2, 3]),
+  //   null,
+  //   null,
+  // )
+  WEBIFC.UNKNOWN //0
+  WEBIFC.STRING //1
+  WEBIFC.LABEL //2
+  WEBIFC.ENUM //3
+  WEBIFC.REAL //4
+  WEBIFC.REF //5
+  WEBIFC.EMPTY //6
+  WEBIFC.SET_BEGIN //7
+  WEBIFC.SET_END //8
+  WEBIFC.LINE_END //9
+  WEBIFC.INTEGER //10
   
   // const spatialTreeTime = performance.now()
   // const spatialTree = model.getSpatialTree()
@@ -106,13 +142,14 @@ const run = async (forceSerialize: boolean) => {
   // fs.writeFileSync(`${name}-tree-table.json`, JSON.stringify([tableData], null, 2))
   // fs.writeFileSync(`${name}-tree.json`, JSON.stringify(spatialTree, null, 2))
   // console.log("Spatial tree calculated in", `${((performance.now() - spatialTreeTime) / 1000).toFixed(5)}s`)
-  const start = performance.now()
-  const ids = model.getAllEntitiesOfClass(WEBIFC.IFCCOVERING)//.slice(0,10)
-  for (const id of ids) {
-    const attrs = await model.getEntityAttributes(id, {includeRels: true})
-    // console.log(attrs)
-  }
-  console.log(ids.length, "properties retrieved in", `${((performance.now() - start) / 1000).toFixed(5)}s`)
+
+  // const start = performance.now()
+  // const ids = model.getAllEntitiesOfClass(WEBIFC.IFCCOVERING)//.slice(0,1)
+  // for (const id of ids) {
+  //   const attrs = await model.getEntityAttributes(id)
+  //   console.log(attrs)
+  // }
+  // console.log(ids.length, "properties retrieved in", `${((performance.now() - start) / 1000).toFixed(5)}s`)
 }
 
-run(false)
+run(true)

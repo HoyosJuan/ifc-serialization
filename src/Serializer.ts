@@ -25,9 +25,11 @@ interface RawEntityAttrs {
 // 1. Store unique string values inside an array.
 
 export class Serializer {
+  private _ids: number[] = []
+  private _types: number[] = []
   private _relationsMap: Record<number, { [name: string]: number[] }> = {}
 
-  private _ifcRelsMap = new Map([
+  private _ifcInvAttrs = new Map([
     [WEBIFC.IFCRELDEFINESBYPROPERTIES, { forRelating: "DefinesOcurrence", forRelated: "IsDefinedBy" }],
     [WEBIFC.IFCRELASSOCIATESMATERIAL, { forRelated: "HasAssociations", forRelating: "AssociatedTo" }],
     [WEBIFC.IFCRELAGGREGATES, { forRelated: "Decomposes", forRelating: "IsDecomposedBy" }],
@@ -104,10 +106,19 @@ export class Serializer {
     return this.classesToInclude.map(entry => entry.rels).flat()
   }
 
+  private _api: WEBIFC.IfcAPI | null = null
+  private async getIfcApi() {
+    if (!this._api) {
+      const ifcApi = new WEBIFC.IfcAPI()
+      await ifcApi.Init()
+      this._api = ifcApi
+    }
+    return this._api
+  }
+
   async process(data: Uint8Array) {
     // Open the IFC
-    const ifcApi = new WEBIFC.IfcAPI()
-    await ifcApi.Init()
+    const ifcApi = await this.getIfcApi()
     const modelID = ifcApi.OpenModel(data)
     const modelClasses = ifcApi.GetAllTypesOfModel(modelID).map(entry => entry.typeID)
     const schema = ifcApi.GetModelSchema(modelID)
@@ -150,21 +161,23 @@ export class Serializer {
         entities.push(entity)
         ids.push(expressID)
         processedEntities.push(expressID)
+        this._ids.push(expressID)
+        this._types.push(entityClass)
       }
 
       if (processedEntities.length === 0) continue
 
-      const idsOffset = IFC.Types.createEntitiesVector(builder, processedEntities)
-      IFC.Types.startTypes(builder)
-      IFC.Types.addType(builder, BigInt(entityClass))
-      IFC.Types.addEntities(builder, idsOffset)
-      const typeOffset = IFC.Types.endTypes(builder)
-      types.push(typeOffset)
+      // const idsOffset = IFC.Types.createEntitiesVector(builder, processedEntities)
+      // IFC.Types.startTypes(builder)
+      // IFC.Types.addType(builder, BigInt(entityClass))
+      // IFC.Types.addEntities(builder, idsOffset)
+      // const typeOffset = IFC.Types.endTypes(builder)
+      // types.push(typeOffset)
     }
 
     const relsToProcess = modelClasses.filter(type => this.getRelsToProcess().includes(type))
     for (const entityClass of relsToProcess) {
-      const relNames = this._ifcRelsMap.get(entityClass)
+      const relNames = this._ifcInvAttrs.get(entityClass)
       if (!relNames) continue
       const { forRelating, forRelated } = relNames
       const classEntities = ifcApi.GetLineIDsWithType(modelID, entityClass)
@@ -188,22 +201,28 @@ export class Serializer {
 
     const { indices: relIndicesVector, relations: relsVector } = this.serializeRelations(builder)
 
+    const treeOffset = await this.createSpatialTree(builder)
+
     const entitiesVector = IFC.Data.createEntitiesVector(builder, entities)
     const idsVector = IFC.Data.createIdsVector(builder, ids)
-    const typesVector = IFC.Data.createTypesVector(builder, types)
+    // const typesVector = IFC.Data.createTypesVector(builder, types)
     const guidsVector = IFC.Data.createGuidsVector(builder, guids)
     const guidIndicesVector = IFC.Data.createGuidIndicesVector(builder, guidIndices)
+    const schemaOffset = builder.createString(schema)
     IFC.Data.startData(builder)
+    IFC.Data.addSchema(builder, schemaOffset)
     IFC.Data.addEntities(builder, entitiesVector)
     IFC.Data.addIds(builder, idsVector)
-    IFC.Data.addTypes(builder, typesVector)
+    // IFC.Data.addTypes(builder, typesVector)
     IFC.Data.addRelIndices(builder, relIndicesVector)
     IFC.Data.addRels(builder, relsVector)
     IFC.Data.addGuidIndices(builder, guidIndicesVector)
     IFC.Data.addGuids(builder, guidsVector)
+    IFC.Data.addSpatialStructure(builder, treeOffset)
     const outData = IFC.Data.endData(builder)
 
     builder.finish(outData)
+    this.clean()
 
     const outBytes = builder.asUint8Array()
     return outBytes
@@ -233,24 +252,29 @@ export class Serializer {
 
       const { value, type } = attrValue
 
-      // Type 5 values are references to other entities
-      // They need to be added as a relation
       if (type === 5) {
+        // Type 5 values are references to other entities
+        // They need to be added as a relation
         if (typeof value !== "number") continue
         this.addRelation(expressID, attrName, value)
       } else {
-        // name and value must always be at index 0 and 1
-        // other data can be set starting index 2
         if (attrName === "GlobalId" && typeof value === "string") {
           // As guids are always unique, is pointless to create a shared string
           guidOffset = builder.createString(value)
           index++
           continue
         }
+        // index and value must always be at index 0 and 1
+        // other data can be set starting index 2
         const attrData = [index, value]
-        const { name } = attrValue as AttrValue
-        if (!name) console.log(attrName, attrValue)
-        if (name && (WEBIFC as any)[name]) attrData.push((WEBIFC as any)[name])
+        const dataTypeName =
+          "name" in attrValue && attrValue.name
+            ? attrValue.name
+            : attrValue.constructor.name.toUpperCase()
+        if (dataTypeName) {
+          const code = (WEBIFC as any)[dataTypeName] ?? type
+          attrData.push(code)
+        }
         const hash = JSON.stringify(attrData)
         const attrOffset = builder.createSharedString(hash)
         attrOffsets.push(attrOffset)
@@ -262,7 +286,7 @@ export class Serializer {
     return {attrOffsets, guidOffset}
   }
 
-  private serializeRelations(builder: fb.Builder, clean = true) {
+  private serializeRelations(builder: fb.Builder) {
     const rels: number[] = []
     for (const [_, entityRels] of Object.entries(this._relationsMap)) {
       const definitions: number[] = []
@@ -280,7 +304,68 @@ export class Serializer {
     const relations = IFC.Data.createRelsVector(builder, rels)
     const ids = Object.keys(this._relationsMap).map(id => Number(id))
     const indices = IFC.Data.createRelIndicesVector(builder, ids)
-    if (clean) this._relationsMap = {}
     return { indices, relations }
+  }
+
+  private getEntityDecomposition(builder: fb.Builder, expressID: number, inverseAttributes: string[]) {
+    const offsets: number[] = []
+
+    for (const attrName of inverseAttributes) {
+      const relations = this._relationsMap[expressID]?.[attrName];
+      if (!relations) continue;
+      
+      const entityGroups: {[type: number]: number[]} = {};
+      for (const id of relations) {
+        const idIndex = this._ids.indexOf(id)
+        if (idIndex === -1) continue
+        const entityClass = this._types[idIndex]
+        if (!entityClass) continue
+        if (!entityGroups[entityClass]) entityGroups[entityClass] = []
+        entityGroups[entityClass].push(id)
+      }
+
+      for (const type in entityGroups) {
+        const entities = entityGroups[type];
+        const childrenOffsets = entities.map(
+          id => this.getEntityDecomposition(builder, id, inverseAttributes)
+        )
+        const childrenVector = IFC.SpatialStructure.createChildrenVector(builder, childrenOffsets)
+        IFC.SpatialStructure.startSpatialStructure(builder)
+        IFC.SpatialStructure.addType(builder, BigInt(type))
+        IFC.SpatialStructure.addChildren(builder, childrenVector)
+        const offset = IFC.SpatialStructure.endSpatialStructure(builder)
+        offsets.push(offset)
+      }
+    }
+    
+    const childrenVector = IFC.SpatialStructure.createChildrenVector(builder, offsets)
+    IFC.SpatialStructure.startSpatialStructure(builder)
+    IFC.SpatialStructure.addId(builder, expressID)
+    IFC.SpatialStructure.addChildren(builder, childrenVector)
+    const offset = IFC.SpatialStructure.endSpatialStructure(builder)
+
+    return offset;
+  }
+
+  private async createSpatialTree(builder: fb.Builder) {
+    const ifcApi = await this.getIfcApi()
+    const type = WEBIFC.IFCPROJECT
+    const classEntities = [...ifcApi.GetLineIDsWithType(0, type)]
+    const childrenOffsets = classEntities.map(
+      id => this.getEntityDecomposition(builder, id, ["IsDecomposedBy", "ContainsElements"])
+    )
+    const childrenVector = IFC.SpatialStructure.createChildrenVector(builder, childrenOffsets)
+    IFC.SpatialStructure.startSpatialStructure(builder)
+    IFC.SpatialStructure.addType(builder, BigInt(type))
+    IFC.SpatialStructure.addChildren(builder, childrenVector)
+    const offset = IFC.SpatialStructure.endSpatialStructure(builder)
+    return offset
+  }
+
+  private clean() {
+    this._ids = []
+    this._types = []
+    this._relationsMap = {}
+    this._api = null
   }
 }

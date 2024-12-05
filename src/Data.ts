@@ -35,6 +35,12 @@ export class Data {
     }
     return this._api
   }
+
+  get schema() {
+    const schema = this._data.schema() as WEBIFC.Schemas.IFC2X3 | WEBIFC.Schemas.IFC4 | WEBIFC.Schemas.IFC4X3
+    if (!schema) throw new Error("Schema was not found!")
+    return schema
+  }
   
   constructor(buffer: Uint8Array) {
     const inBuffer = new fb.ByteBuffer(buffer)
@@ -89,9 +95,17 @@ export class Data {
       const attr = bufferEntity.attrs(j);
       if (!attr) continue
       const [index, value, type] = JSON.parse(attr)
-      if (type === undefined) continue
-      // console.log(type, ifcApi.GetNameFromTypeCode(type))
-      attrs[index] = ifcApi.CreateIfcType(0, type, value)
+      if (type >= 0 && type <= 10) {
+        attrs[index] = { type, value }
+      } else {
+        try {
+          const ifcType = ifcApi.CreateIfcType(0, type, value)
+          ifcType.value = value
+          attrs[index] = ifcType
+        } catch (error) {
+          console.log("Something went wrong setting an attribute.")
+        }
+      }
     }
     const ifcEntity = ifcApi.CreateIfcEntity(0, classType, ...attrs)
     ifcEntity.expressID = expressID
@@ -136,47 +150,70 @@ export class Data {
     return data
   }
 
-  private getEntityDecomposition(expressID: number, inverseAttributes: string[]) {
-    const item: SpatialStructure = {
-      id: expressID
-    };
+  // private getEntityDecomposition(expressID: number, inverseAttributes: string[]) {
+  //   const item: SpatialStructure = {
+  //     id: expressID
+  //   };
 
-    for (const attrName of inverseAttributes) {
-      const relations = this.getEntityRelations(expressID)?.[attrName];
-      if (!relations) continue;
-      if (!item.children) item.children = [];
+  //   for (const attrName of inverseAttributes) {
+  //     const relations = this.getEntityRelations(expressID)?.[attrName];
+  //     if (!relations) continue;
+  //     if (!item.children) item.children = [];
       
-      const entityGroups: {[type: number]: number[]} = {};
-      for (const id of relations) {
-        const entityClass = this.getEntityClass(id)
-        if (!entityClass) continue
-        if (!entityGroups[entityClass]) entityGroups[entityClass] = []
-        entityGroups[entityClass].push(id)
-      }
+  //     const entityGroups: {[type: number]: number[]} = {};
+  //     for (const id of relations) {
+  //       const entityClass = this.getEntityClass(id)
+  //       if (!entityClass) continue
+  //       if (!entityGroups[entityClass]) entityGroups[entityClass] = []
+  //       entityGroups[entityClass].push(id)
+  //     }
 
-      for (const type in entityGroups) {
-        const entities = entityGroups[type];
-        const typeItem: SpatialStructure = {
-          type: Number(type),
-          children: entities.map(
-            id => this.getEntityDecomposition(id, inverseAttributes)
-          )
-        }
-        item.children.push(typeItem)
-      }
+  //     for (const type in entityGroups) {
+  //       const entities = entityGroups[type];
+  //       const typeItem: SpatialStructure = {
+  //         type: Number(type),
+  //         children: entities.map(
+  //           id => this.getEntityDecomposition(id, inverseAttributes)
+  //         )
+  //       }
+  //       item.children.push(typeItem)
+  //     }
+  //   }
+
+  //   return item;
+  // }
+
+  // getSpatialTree() {
+  //   const type = WEBIFC.IFCPROJECT
+  //   const tree: SpatialStructure = {
+  //     type: type,
+  //     children: this.getAllEntitiesOfClass(type).map(
+  //       id => this.getEntityDecomposition(id, ["IsDecomposedBy", "ContainsElements"])
+  //     )
+  //   }
+  //   return tree
+  // }
+
+  private getTreeItem(item: IFC.SpatialStructure) {
+    const children: SpatialStructure[] = []
+    for (let i = 0; i < item.childrenLength(); i++) {
+      const child = item.children(i);
+      if (!child) continue;
+      children.push(this.getTreeItem(child))
     }
-
-    return item;
+    const tree: SpatialStructure = {}
+    const id = item.id()
+    const type = item.type()
+    if (id !== -1) tree.id = id
+    if (Number(type) !== -1) tree.type = Number(type)
+    if (children.length > 0) tree.children = children
+    return tree
   }
 
-  getSpatialTree() {
-    const type = WEBIFC.IFCPROJECT
-    const tree: SpatialStructure = {
-      type: type,
-      children: this.getAllEntitiesOfClass(type).map(
-        id => this.getEntityDecomposition(id, ["IsDecomposedBy", "ContainsElements"])
-      )
-    }
+  get spatialTree() {
+    const item = this._data.spatialStructure(new IFC.SpatialStructure())
+    if (!item) return {}
+    const tree = this.getTreeItem(item)
     return tree
   }
 
