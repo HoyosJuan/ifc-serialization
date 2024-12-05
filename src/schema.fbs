@@ -1,8 +1,8 @@
 namespace IFC.Entities;
 
 table SpatialStructure {
-  type: int64;
-  id: int;
+  id: int = -1;
+  type: int64 = -1;
   children: [SpatialStructure];
 }
 
@@ -18,6 +18,10 @@ table Types {
 table Rel {
   defs: [string];
 }
+
+// ids: [123, 234, 345, 456, 567, 678, 789]
+// types: [328723123, 1239839286, 12398102]
+// typeIndices: [{start: 0, end: 2}, {start: 3, end: 5}, {start: 6, end: 7}]
 
 table Data {
   schema: string;
