@@ -1,6 +1,7 @@
 import * as IFC from "./ifc/entities"
 import * as fb from "flatbuffers"
 import * as WEBIFC from "web-ifc"
+import { RawEntityAttrs } from "./types"
 
 interface SpatialStructure {
   type?: number;
@@ -8,16 +9,24 @@ interface SpatialStructure {
   children?: SpatialStructure[]
 }
 
+interface GetAttrsConfig {
+  includeRels: boolean;
+  includeGuid: boolean;
+}
+
 export class Data {
   private _data: IFC.Data
+
+  // classes index
   private _ci: Record<number, number> | null = null;
+
+  // guids index
+  private _gi: Record<string, number> | null = null
 
   private get _classesIndex() {
     if (!this._ci) this._ci = this.initializeClassesIndex()
     return this._ci
   }
-
-  private _gi: Record<string, number> | null = null
 
   private get _guidsIndex() {
     if (!this._gi) this._gi = this.initializeGuidsIndex()
@@ -41,19 +50,31 @@ export class Data {
     if (!schema) throw new Error("Schema was not found!")
     return schema
   }
+
+  maxExpressID: number = 0
   
   constructor(buffer: Uint8Array) {
     const inBuffer = new fb.ByteBuffer(buffer)
     this._data = IFC.Data.getRootAsData(inBuffer)
+    this.maxExpressID = this._data.maxExpressId()
   }
+
+  // async init(buffer: Uint8Array) {
+  //   const inBuffer = new fb.ByteBuffer(buffer)
+  //   this._data = IFC.Data.getRootAsData(inBuffer)
+  //   const ifcApi = new WEBIFC.IfcAPI()
+  //   await ifcApi.Init()
+  //   this._api = ifcApi
+  //   ifcApi.CreateModel({schema: WEBIFC.Schemas.IFC4})
+  // }
 
   private initializeClassesIndex() {
     const indexation: Record<number, number> = {}
-    for (let i = 0; i < this._data.typesLength(); i++) {
-      const typeData = this._data.types(i);
-      if (!typeData) continue;
-      const typeCode = Number(typeData.type());
-      indexation[typeCode] = i;
+    for (let i = 0; i < this._data.classesLength(); i++) {
+      const classCode = this._data.classes(i);
+      if (!classCode) continue;
+      const code = Number(classCode);
+      indexation[code] = i;
     }
     return indexation
   }
@@ -61,41 +82,51 @@ export class Data {
   private initializeGuidsIndex() {
     const indexation: Record<string, number> = {}
     for (let i = 0; i < this._data.guidsLength(); i++) {
-      const expressID = this._data.guidIndices(i)
-      if (!expressID) continue
-      const guid = this._data.guids(i);
-      indexation[guid] = expressID
+      const guid = this._data.guids(i)
+      if (!guid) continue
+      indexation[guid] = i
     }
     return indexation
   }
 
-  async getEntityAttributes(id: number | string, config: { includeRels: boolean } = { includeRels: false }) {
+  private getAttrsConfigDefault: Required<GetAttrsConfig> = {
+    includeRels: false,
+    includeGuid: false
+  }
+
+  async getEntityAttributes(
+    id: number | string,
+    config?: Partial<GetAttrsConfig>
+  ) {
+    const {includeGuid} = {...this.getAttrsConfigDefault, ...config}
     const ifcApi = await this.getIfcApi()
     const expressID = typeof id === "number" ? id : this._guidsIndex[id]
-    const attrsIndex = this._data.idsArray()?.indexOf(expressID)
+    const attrsIndex = this._data.expressIdsArray()?.indexOf(expressID)
     const classType = this.getEntityClass(expressID)
     if (!(classType && attrsIndex !== undefined && attrsIndex !== -1)) return null
     const bufferEntity = this._data.entities(attrsIndex);
     if (!bufferEntity) return null
     const attrs = []
-    if (typeof id === "string") {
-      const ifcType = ifcApi.CreateIfcType(0, WEBIFC.IFCGLOBALLYUNIQUEID, id)
-      attrs[0] = ifcType
-    } else {
-      const guidIndex = this._data.guidIndicesArray()?.indexOf(expressID)
-      if (guidIndex !== undefined) {
-        const guid = this._data.guids(guidIndex)
-        if (guid) {
+    if (includeGuid) {
+      if (typeof id === "string") {
+        const ifcType = ifcApi.CreateIfcType(0, WEBIFC.IFCGLOBALLYUNIQUEID, id)
+        attrs[0] = ifcType
+      } else {
+        const guid = this.getEntityGuid(expressID)
+        if (guid !== null) {
           const ifcType = ifcApi.CreateIfcType(0, WEBIFC.IFCGLOBALLYUNIQUEID, guid)
           attrs[0] = ifcType
         }
       }
     }
+    const changesMap = this._changesMap[expressID]
     for (let j = 0; j < bufferEntity.attrsLength(); j++) {
       const attr = bufferEntity.attrs(j);
       if (!attr) continue
-      const [index, value, type] = JSON.parse(attr)
-      if (type >= 0 && type <= 10) {
+      let [index, value, type] = JSON.parse(attr)
+      if (changesMap?.[index]) {
+        attrs[index] = changesMap[index]
+      } else if (type >= 0 && type <= 10) {
         attrs[index] = { type, value }
       } else {
         try {
@@ -109,7 +140,11 @@ export class Data {
     }
     const ifcEntity = ifcApi.CreateIfcEntity(0, classType, ...attrs)
     ifcEntity.expressID = expressID
-    return ifcEntity
+    for (const [key, value] of Object.entries(ifcEntity)) {
+      // @ts-ignore
+      if (value === undefined) ifcEntity[key] = null
+    }
+    return ifcEntity as Record<string, any> & {type: number, expressID: number}
     // const { includeRels } = config
     // if (includeRels) {
     //   const rels = this.getEntityRelations(expressID)
@@ -125,14 +160,6 @@ export class Data {
     //   }
     // }
     // if (Object.keys(ifcEntity).length === 0) return null
-  }
-
-  getAllEntitiesOfClass(classID: number) {
-    const index = this._classesIndex[classID];
-    if (index === undefined) return [];
-    const array = this._data.types(index)?.entitiesArray();
-    if (!array) return []
-    return [...array];
   }
 
   getEntityRelations(expressID: number) {
@@ -217,19 +244,6 @@ export class Data {
     return tree
   }
 
-  getEntityClass(expressID: number) {
-    let classType: number | null = null
-    for (let i = 0; i < this._data.typesLength(); i++) {
-      const element = this._data.types(i);
-      if (!element) continue
-      if (element.entitiesArray()?.includes(expressID)) {
-        classType = Number(element.type())
-        break
-      };
-    }
-    return classType
-  }
-
   // Free the memory from internal indexations used to process things faster.
   cleanIndexations() {
     this._ci = null
@@ -246,5 +260,91 @@ export class Data {
     }
     ifcApi.Dispose()
     return names
+  }
+
+  get classes() {
+    const types: number[] = []
+    for (let i = 0; i < this._data.classesLength(); i++) {
+      const type = this._data.classes(i);
+      if (type === null) continue
+      types.push(Number(type))
+    }
+    return types
+  }
+
+  /**
+   * 
+   * @param id GlobalID or ExpressID of the entity to get its class from
+   * @returns The WebIFC class code
+   */
+  getEntityClass(id: number | string) {
+    const expressID = typeof id === "number" ? id : this.getEntityByGuid(id)
+    if (!expressID) return null
+    const entityIndex = this._data.expressIdsArray()?.indexOf(expressID)
+    if (entityIndex === undefined) return null
+    const classIndex = this._data.expressIdsType(entityIndex)
+    if (classIndex === null) return null
+    const classCode = this._data.classes(classIndex)
+    if (!classCode) return null
+    return Number(classCode)
+  }
+
+  getAllEntitiesOfClass(type: number) {
+    const idsArray = this._data.expressIdsArray()
+    const idsTypeArray = this._data.expressIdsTypeArray()
+    const index = this._classesIndex[type];
+    if (!(idsArray && idsTypeArray && index !== undefined)) return []
+    const range = this._data.classExpressIds(index)
+    if (!range) return []
+    const start = idsTypeArray.indexOf(index)
+    const end = idsTypeArray.lastIndexOf(index)
+    return [...idsArray.slice(start, end)]
+  }
+
+  getEntityGuid(expressID: number) {
+    const index = this._data.expressIdsArray()?.indexOf(expressID)
+    if (index === undefined) return null
+    const guidIndex = this._data.guidsIdArray()?.indexOf(index)
+    if (guidIndex === undefined) return null
+    const guid = this._data.guids(guidIndex)
+    if (guid === undefined) return null
+    return guid
+  }
+
+  getEntityByGuid(guid: string) {
+    const index = this._guidsIndex[guid]
+    if (index === undefined) return null
+    const entityIndex = this._data.guidsId(index)
+    if (entityIndex === null) return null
+    const expressID = this._data.expressIds(entityIndex)
+    return expressID
+  }
+
+  private _newEntities: Record<number, any> = {}
+  async addEntity(data: any) {
+    this.maxExpressID = this.maxExpressID++
+    data.expressID = this.maxExpressID
+    this._newEntities[this.maxExpressID] = data
+  }
+
+  private _changesMap: Record<number, Record<number, any>> = {}
+
+  async updateAttribute(expressID: number, attrName: string, value: any) {
+    const ifcApi = await this.getIfcApi()
+    const classCode = this.getEntityClass(expressID)
+    if (!classCode) return false
+    const ifcEntity = ifcApi.CreateIfcEntity(0, classCode)
+    const attrIndex = Object.keys(ifcEntity).indexOf(attrName) - 2
+    if (attrIndex < 0) return false
+    if (!this._changesMap[expressID]) this._changesMap[expressID] = {}
+    if (!this._changesMap[expressID][attrIndex]) this._changesMap[expressID][attrIndex] = ""
+    this._changesMap[expressID][attrIndex] = value
+    return true
+  }
+
+  async createType(type: number, value: string | number | boolean | number[]) {
+    const ifcApi = await this.getIfcApi()
+    if (!ifcApi) return null
+    return ifcApi.CreateIfcType(0, type, value)
   }
 }

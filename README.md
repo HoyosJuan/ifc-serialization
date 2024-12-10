@@ -1,3 +1,37 @@
+### How is all data stored?
+```ts
+const ifcData = {
+  types: [4582374, 1238892, 12837905], // ok
+  ids: [123, 234, 345, 456, 567], // ok
+  idsType: [0, 0, 1, 2, 2], // ok
+  typeIds: [
+    {start: 0, end: 2},
+    {start: 2, end: 3},
+    {start: 3, end: 5}
+  ], // ok
+  guids: [
+    "98eynq7ntqew",
+    "oih98qgw9qwe",
+    "aiosdh98qbdw",
+    "qasod89812b3"
+  ], // ok
+  guidsId: [0, 1, 3, 4], // ok
+  spatialStructure: {
+    type: 0,
+    children: [
+      {
+        id: 0,
+        children: ...
+      }
+    ]
+  }, // ok, but isn't easier to use the direct type and id values?
+  entities: [
+    { attrs: '[[0,"WallName",425211],[4,"WallDescription",5464533]]' }
+  ], // ok
+  // Current approach for relations
+}
+```
+
 ### How are attributes stored?
 ```ts
 // entity processed: 123

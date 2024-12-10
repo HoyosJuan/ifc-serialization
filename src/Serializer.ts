@@ -1,32 +1,12 @@
 import * as fb from "flatbuffers"
 import * as IFC from "./ifc/entities"
 import * as WEBIFC from "web-ifc"
-
-interface ReferenceAttr {
-  value: number,
-  type: 5
-}
-
-interface AttrValue {
-  value: string | boolean | number,
-  type: number,
-  name?: string
-}
-
-interface RawEntityAttrs {
-  [name: string]: AttrValue | ReferenceAttr | AttrValue[] | ReferenceAttr[] | null
-}
-
-// Things that lowers the size:
-// 1. Exclude the relation entities.
-// 2. Use a shared string.
-
-// Things that doesn't seem to have an impact:
-// 1. Store unique string values inside an array.
+import { RawEntityAttrs } from "./types"
 
 export class Serializer {
-  private _ids: number[] = []
-  private _types: number[] = []
+  private _expressIDs: number[] = []
+  private _classes: bigint[] = []
+  private _expressIdsType: number[] = []
   private _relationsMap: Record<number, { [name: string]: number[] }> = {}
 
   private _ifcInvAttrs = new Map([
@@ -117,6 +97,8 @@ export class Serializer {
   }
 
   async process(data: Uint8Array) {
+    this.clean()
+
     // Open the IFC
     const ifcApi = await this.getIfcApi()
     const modelID = ifcApi.OpenModel(data)
@@ -126,53 +108,47 @@ export class Serializer {
     if (!schemaNamespace) throw new Error(`Model schema not recognized.`)
 
     // Define the offset arrays for the flatbuffers root_type
-    const types: number[] = []
-    const ids: number[] = []
-    const entities: number[] = []
-    const guidIndices: number[] = []
+    const entitiesOffsets: number[] = []
+    const guidsId: number[] = []
     const guids: number[] = []
+    const typeIds: number[] = []
 
     const entitiesToProcess = this.getEntitiesToProcess()
     const toProcess = modelClasses.filter(type => ifcApi.IsIfcElement(type) || entitiesToProcess.includes(type))
-    // const toProcess = modelClasses.filter(type => entitiesToProcess.includes(type))
-    this._relationsMap = {}
 
     const builder = new fb.Builder(1024)
 
+    let classIndex = 0
     for (const entityClass of toProcess) {
       const classEntities = ifcApi.GetLineIDsWithType(modelID, entityClass)
       if (classEntities.size() === 0) continue
 
-      const processedEntities: number[] = []
+      let classWasProcessed = false
 
+      let entityCount = this._expressIDs.length
       for (let index = 0; index < classEntities.size(); index++) {
         const expressID = classEntities.get(index);
         const attrs = await ifcApi.properties.getItemProperties(modelID, expressID) as RawEntityAttrs
         if (!attrs) continue
-        const { attrOffsets, guidOffset } = this.serializeEntityAttributes(builder, expressID, attrs)
+        const { attrOffsets, guidOffset } = this.serializeAttributes(builder, expressID, attrs)
+        const attributesVector = IFC.Entity.createAttrsVector(builder, attrOffsets)
+        const entity = IFC.Entity.createEntity(builder, attributesVector)
+        entitiesOffsets.push(entity)
+        this._expressIDs.push(expressID)
+        this._expressIdsType.push(classIndex)
         if (guidOffset) {
           guids.push(guidOffset)
-          guidIndices.push(expressID)
+          guidsId.push(this._expressIDs.length - 1)
         }
-        const attributesVector = IFC.Entity.createAttrsVector(builder, attrOffsets)
-        IFC.Entity.startEntity(builder)
-        IFC.Entity.addAttrs(builder, attributesVector)
-        const entity = IFC.Entity.endEntity(builder)
-        entities.push(entity)
-        ids.push(expressID)
-        processedEntities.push(expressID)
-        this._ids.push(expressID)
-        this._types.push(entityClass)
+        classWasProcessed = true
       }
+      
+      if (!classWasProcessed) continue
+      classIndex++
 
-      if (processedEntities.length === 0) continue
-
-      // const idsOffset = IFC.Types.createEntitiesVector(builder, processedEntities)
-      // IFC.Types.startTypes(builder)
-      // IFC.Types.addType(builder, BigInt(entityClass))
-      // IFC.Types.addEntities(builder, idsOffset)
-      // const typeOffset = IFC.Types.endTypes(builder)
-      // types.push(typeOffset)
+      const rangeOffset = IFC.Range.createRange(builder, entityCount, this._expressIDs.length)
+      typeIds.push(rangeOffset)
+      this._classes.push(BigInt(entityClass))
     }
 
     const relsToProcess = modelClasses.filter(type => this.getRelsToProcess().includes(type))
@@ -203,22 +179,27 @@ export class Serializer {
 
     const treeOffset = await this.createSpatialTree(builder)
 
-    const entitiesVector = IFC.Data.createEntitiesVector(builder, entities)
-    const idsVector = IFC.Data.createIdsVector(builder, ids)
-    // const typesVector = IFC.Data.createTypesVector(builder, types)
+    const typeIdsVector = IFC.Data.createClassExpressIdsVector(builder, typeIds)
+    const expressIdsTypeVector = IFC.Data.createExpressIdsTypeVector(builder, this._expressIdsType)
+    const entitiesVector = IFC.Data.createEntitiesVector(builder, entitiesOffsets)
+    const expressIdsVector = IFC.Data.createExpressIdsVector(builder, this._expressIDs)
+    const classesVector = IFC.Data.createClassesVector(builder, this._classes)
     const guidsVector = IFC.Data.createGuidsVector(builder, guids)
-    const guidIndicesVector = IFC.Data.createGuidIndicesVector(builder, guidIndices)
+    const guidsIdVector = IFC.Data.createGuidsIdVector(builder, guidsId)
     const schemaOffset = builder.createString(schema)
     IFC.Data.startData(builder)
     IFC.Data.addSchema(builder, schemaOffset)
     IFC.Data.addEntities(builder, entitiesVector)
-    IFC.Data.addIds(builder, idsVector)
-    // IFC.Data.addTypes(builder, typesVector)
+    IFC.Data.addExpressIds(builder, expressIdsVector)
+    IFC.Data.addClasses(builder, classesVector)
+    IFC.Data.addExpressIdsType(builder, expressIdsTypeVector)
+    IFC.Data.addClassExpressIds(builder, typeIdsVector)
     IFC.Data.addRelIndices(builder, relIndicesVector)
     IFC.Data.addRels(builder, relsVector)
-    IFC.Data.addGuidIndices(builder, guidIndicesVector)
+    IFC.Data.addGuidsId(builder, guidsIdVector)
     IFC.Data.addGuids(builder, guidsVector)
     IFC.Data.addSpatialStructure(builder, treeOffset)
+    IFC.Data.addMaxExpressId(builder, ifcApi.GetMaxExpressID(modelID))
     const outData = IFC.Data.endData(builder)
 
     builder.finish(outData)
@@ -228,7 +209,7 @@ export class Serializer {
     return outBytes
   }
 
-  private serializeEntityAttributes(builder: fb.Builder, expressID: number, attrs: RawEntityAttrs) {
+  private serializeAttributes(builder: fb.Builder, expressID: number, attrs: RawEntityAttrs) {
     const attrOffsets: number[] = []
     let guidOffset: number | null = null
 
@@ -315,13 +296,14 @@ export class Serializer {
       if (!relations) continue;
       
       const entityGroups: {[type: number]: number[]} = {};
-      for (const id of relations) {
-        const idIndex = this._ids.indexOf(id)
-        if (idIndex === -1) continue
-        const entityClass = this._types[idIndex]
-        if (!entityClass) continue
-        if (!entityGroups[entityClass]) entityGroups[entityClass] = []
-        entityGroups[entityClass].push(id)
+      for (const expressID of relations) {
+        const entityIndex = this._expressIDs.indexOf(expressID)
+        if (entityIndex === -1) continue
+        const classIndex = this._expressIdsType[entityIndex]
+        if (!classIndex) continue
+        const newClass = this._classes[classIndex]
+        if (!entityGroups[Number(newClass)]) entityGroups[Number(newClass)] = []
+        entityGroups[Number(newClass)].push(expressID)
       }
 
       for (const type in entityGroups) {
@@ -363,9 +345,10 @@ export class Serializer {
   }
 
   private clean() {
-    this._ids = []
-    this._types = []
+    this._expressIDs = []
+    this._classes = []
     this._relationsMap = {}
+    this._expressIdsType = []
     this._api = null
   }
 }

@@ -10,29 +10,29 @@ table Entity {
   attrs: [string];
 }
 
-table Types {
-  type: int64;
-  entities: [int];
-}
-
 table Rel {
   defs: [string];
 }
 
-// ids: [123, 234, 345, 456, 567, 678, 789]
-// types: [328723123, 1239839286, 12398102]
-// typeIndices: [{start: 0, end: 2}, {start: 3, end: 5}, {start: 6, end: 7}]
+table Range {
+  start: uint;
+  end: uint;
+}
 
 table Data {
   schema: string;
-  types: [Types];
-  ids: [int];
+  maxExpressId: int;
+  classes: [int64];
+  expressIds: [int];
+  expressIdsType: [ubyte]; // Works if less than 255 Data.classes are converted
+  classExpressIds: [Range];
+  guids: [string];
+  guidsId: [uint];
   entities: [Entity];
+  // WIP 👇
+  spatialStructure: SpatialStructure;
   relIndices: [int];
   rels: [Rel];
-  guidIndices: [int];
-  guids: [string];
-  spatialStructure: SpatialStructure;
 }
 
 root_type Data;

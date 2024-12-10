@@ -83,8 +83,53 @@ const run = async (forceSerialize: boolean) => {
     console.log("New size:", `${newSize}mb`)
   }
 
+  const ifcApi = new WEBIFC.IfcAPI()
+  await ifcApi.Init()
+  
+  const dataSetStart = performance.now()
   const bytes = new Uint8Array(fs.readFileSync(`${name}.bin`))
   const model = new Data(bytes)
+  console.log("Data set in:", `${(performance.now() - dataSetStart).toFixed(4)}ms`)
+
+  const modelID = ifcApi.CreateModel({ schema: model.schema })
+  
+  const operationStart = performance.now()
+  const attrs = await model.getEntityAttributes(25219)
+  if (attrs) {
+    const type = await model.createType(WEBIFC.IFCLABEL, "My New Entity Name")
+    if (type) await model.updateAttribute(25219, "Name", type)
+    const newAttrs = await model.getEntityAttributes(25219)
+    if (newAttrs) {
+      console.log(newAttrs)
+      const asd = new WEBIFC.IFC4.IfcPropertySingleValue(
+        new WEBIFC.IFC4.IfcIdentifier("CustomProp"),
+        null,
+        new WEBIFC.IFC4.IfcReal(2),
+        null
+      )
+      asd.expressID = 2
+      ifcApi.WriteLine(modelID, asd)
+      console.log(ifcApi.GetLine(modelID, 2))
+      const attrName = Object.keys(asd).slice(2)[2]
+      // @ts-ignore
+      asd[attrName] = {type: 10, name: "IFCINTEGER", value: 2}
+      ifcApi.WriteLine(modelID, asd)
+      console.log(ifcApi.GetLine(modelID, 2))
+    }
+  }
+  console.log("Operation done in:", `${(performance.now() - operationStart).toFixed(4)}ms`)
+
+  // console.log(model.getEntityGuid(71286))
+  // console.log(model.getEntityByGuid("0mIuNN$0HBuCdIzdLQSa58"))
+  // const entities = model.getAllEntitiesOfClass(WEBIFC.IFCCOVERING)
+  // const names = new Set()
+  // for (const entity of entities) {
+  //   const type = model.getEntityClass(entity)
+  //   if (!type) continue
+  //   const name = ifcApi.GetNameFromTypeCode(type)
+  //   names.add(name)
+  // }
+  // console.log(names, entities.length)
   // fs.writeFileSync(`${name}-tree.json`, JSON.stringify(model.spatialTree, null, 2))
 
   // const expressID = 91
@@ -103,10 +148,6 @@ const run = async (forceSerialize: boolean) => {
   // const attrsFromGlobalID = model.getEntityAttributes(guid)
   // console.log(attrsFromGlobalID)
   // console.log("Attributes from GUID retreived in", `${((performance.now() - startB) / 1000).toFixed(5)}s`)
-
-
-  // const ifcApi = new WEBIFC.IfcAPI()
-  // await ifcApi.Init()
 
   // @ts-ignore
   // const site = new WEBIFC.IFC4.IfcSite(
@@ -152,4 +193,4 @@ const run = async (forceSerialize: boolean) => {
   // console.log(ids.length, "properties retrieved in", `${((performance.now() - start) / 1000).toFixed(5)}s`)
 }
 
-run(true)
+run(false)
