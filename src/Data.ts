@@ -1,7 +1,11 @@
 import * as IFC from "./ifc/entities"
 import * as fb from "flatbuffers"
-import * as WEBIFC from "web-ifc"
-import { RawEntityAttrs } from "./types"
+import { Schemas } from "web-ifc"
+
+interface IfcMetadata {
+  schema: Schemas.IFC2X3 | Schemas.IFC4 | Schemas.IFC4X3,
+  maxExpressID: number
+}
 
 interface SpatialStructure {
   type?: number;
@@ -15,6 +19,10 @@ interface GetAttrsConfig {
 }
 
 export class Data {
+  private _categoryNames: Record<number, string> = {
+    234692834: "IfcWall"
+  }
+
   private _data: IFC.Data
 
   // classes index
@@ -23,8 +31,11 @@ export class Data {
   // guids index
   private _gi: Record<string, number> | null = null
 
+  // categories to local ids index
+  private _cli: Record<number, number[]> | null = null
+
   private get _classesIndex() {
-    if (!this._ci) this._ci = this.initializeClassesIndex()
+    if (!this._ci) this._ci = this.initializeCategoriesIndex()
     return this._ci
   }
 
@@ -33,45 +44,148 @@ export class Data {
     return this._gi
   }
 
-  private _api: WEBIFC.IfcAPI | null = null
-  
-  private async getIfcApi() {
-    if (!this._api) {
-      const ifcApi = new WEBIFC.IfcAPI()
-      await ifcApi.Init()
-      this._api = ifcApi
-      ifcApi.CreateModel({schema: WEBIFC.Schemas.IFC4})
+  private get _categoriesToLocalIds() {
+    if (!this._cli) this._cli = this.initCategoriesToLocalIdsIndex()
+    return this._cli
+  }
+
+  get metadata(): Partial<IfcMetadata> {
+    const data = this._data.metadata()
+    if (!data) return {}
+    return JSON.parse(data)
+  }
+
+  get categories() {
+    const categories: number[] = []
+    for (let i = 0; i < this._data.categoriesLength(); i++) {
+      const category = this._data.categories(i);
+      if (category === null) continue
+      categories.push(Number(category))
     }
-    return this._api
+    return categories
   }
 
-  get schema() {
-    const schema = this._data.schema() as WEBIFC.Schemas.IFC2X3 | WEBIFC.Schemas.IFC4 | WEBIFC.Schemas.IFC4X3
-    if (!schema) throw new Error("Schema was not found!")
-    return schema
+  get guids() {
+    const guids: string[] = []
+    for (let i = 0; i < this._data.guidsLength(); i++) {
+      const guid = this._data.guids(i);
+      if (!guid) continue
+      guids.push(guid)
+    }
+    return guids
+  }
+  
+  get localIds() {
+    const ids: number[] = []
+    for (let i = 0; i < this._data.localIdsLength(); i++) {
+      const id = this._data.localIds(i);
+      if (id === null) continue
+      ids.push(id)
+    }
+    return ids
+  }
+  
+  get localIdsType() {
+    const indices: number[] = []
+    for (let i = 0; i < this._data.localIdsTypeLength(); i++) {
+      const index = this._data.localIdsType(i);
+      if (index === null) continue
+      indices.push(index)
+    }
+    return indices
+  }
+  
+  get guidsId() {
+    const indices: number[] = []
+    for (let i = 0; i < this._data.guidsIdLength(); i++) {
+      const index = this._data.guidsId(i);
+      if (index === null) continue
+      indices.push(index)
+    }
+    return indices
+  }
+  
+  get relIndices() {
+    const indices: number[] = []
+    for (let i = 0; i < this._data.relIndicesLength(); i++) {
+      const index = this._data.relIndices(i);
+      if (index === null) continue
+      indices.push(index)
+    }
+    return indices
   }
 
-  maxExpressID: number = 0
+  get rels() {
+    const result: any[] = []
+    for (let i = 0; i < this._data.relsLength(); i++) {
+      const rel = this._data.rels(i);
+      if (!rel) continue
+      const itemRels: any[] = []
+      for (let j = 0; j < rel.defsLength(); j++) {
+        const defs = rel.defs(j);
+        if (!defs) continue
+        itemRels.push(JSON.parse(defs))
+      }
+      result.push(itemRels)
+    }
+    return result
+  }
+
+  get attributes() {
+    const result: any[] = []
+    for (let i = 0; i < this._data.attributesLength(); i++) {
+      const entity = this._data.attributes(i);
+      if (!entity) continue
+      const itemAttrs: any[] = []
+      for (let j = 0; j < entity.attrsLength(); j++) {
+        const attrs = entity.attrs(j);
+        if (!attrs) continue
+        itemAttrs.push(JSON.parse(attrs))
+      }
+      result.push(itemAttrs)
+    }
+    return result
+  }
+
+  get data() {
+    return {
+      metadata: this.metadata,
+      categories: this.categories,
+      localIds: this.localIds,
+      localIdsType: this.localIdsType,
+      guids: this.guids,
+      guidsId: this.guidsId,
+      attributes: this.attributes,
+      rels: this.rels,
+      relIndices: this.relIndices
+    }
+  }
   
   constructor(buffer: Uint8Array) {
     const inBuffer = new fb.ByteBuffer(buffer)
     this._data = IFC.Data.getRootAsData(inBuffer)
-    this.maxExpressID = this._data.maxExpressId()
+  }
+  
+  private initCategoriesToLocalIdsIndex() {
+    const indexation: Record<number, number[]> = {}
+    const localIdsType = this._data.localIdsTypeArray()
+    const localIds = this._data.localIdsArray()
+    if (!(localIdsType && localIds)) return indexation
+    for (let i = 0; i < this._data.categoriesLength(); i++) {
+      const category = this._data.categories(i)
+      if (category === null) continue
+      const start = localIdsType.indexOf(i)
+      const end = localIdsType.lastIndexOf(i)
+      if (start === -1 || end === -1) continue
+      indexation[Number(category)] = [...localIds.slice(start, end + 1)]
+    }
+    return indexation
   }
 
-  // async init(buffer: Uint8Array) {
-  //   const inBuffer = new fb.ByteBuffer(buffer)
-  //   this._data = IFC.Data.getRootAsData(inBuffer)
-  //   const ifcApi = new WEBIFC.IfcAPI()
-  //   await ifcApi.Init()
-  //   this._api = ifcApi
-  //   ifcApi.CreateModel({schema: WEBIFC.Schemas.IFC4})
-  // }
-
-  private initializeClassesIndex() {
+  private initializeCategoriesIndex() {
     const indexation: Record<number, number> = {}
-    for (let i = 0; i < this._data.classesLength(); i++) {
-      const classCode = this._data.classes(i);
+    for (let i = 0; i < this._data.categoriesLength(); i++) {
+      const classCode = this._data.categories(i);
       if (!classCode) continue;
       const code = Number(classCode);
       indexation[code] = i;
@@ -94,28 +208,25 @@ export class Data {
     includeGuid: false
   }
 
-  async getEntityAttributes(
+  async getItemAttributes(
     id: number | string,
     config?: Partial<GetAttrsConfig>
   ) {
-    const {includeGuid} = {...this.getAttrsConfigDefault, ...config}
-    const ifcApi = await this.getIfcApi()
+    const { includeGuid } = {...this.getAttrsConfigDefault, ...config}
     const expressID = typeof id === "number" ? id : this._guidsIndex[id]
-    const attrsIndex = this._data.expressIdsArray()?.indexOf(expressID)
+    const attrsIndex = this._data.localIdsArray()?.indexOf(expressID)
     const classType = this.getEntityClass(expressID)
     if (!(classType && attrsIndex !== undefined && attrsIndex !== -1)) return null
-    const bufferEntity = this._data.entities(attrsIndex);
+    const bufferEntity = this._data.attributes(attrsIndex);
     if (!bufferEntity) return null
-    const attrs = []
+    const attrs: Record<string, any> = {}
     if (includeGuid) {
       if (typeof id === "string") {
-        const ifcType = ifcApi.CreateIfcType(0, WEBIFC.IFCGLOBALLYUNIQUEID, id)
-        attrs[0] = ifcType
+        attrs.guid = id
       } else {
-        const guid = this.getEntityGuid(expressID)
+        const guid = this.getItemGuid(expressID)
         if (guid !== null) {
-          const ifcType = ifcApi.CreateIfcType(0, WEBIFC.IFCGLOBALLYUNIQUEID, guid)
-          attrs[0] = ifcType
+          attrs.guid = guid
         }
       }
     }
@@ -126,25 +237,12 @@ export class Data {
       let [index, value, type] = JSON.parse(attr)
       if (changesMap?.[index]) {
         attrs[index] = changesMap[index]
-      } else if (type >= 0 && type <= 10) {
-        attrs[index] = { type, value }
-      } else {
-        try {
-          const ifcType = ifcApi.CreateIfcType(0, type, value)
-          ifcType.value = value
-          attrs[index] = ifcType
-        } catch (error) {
-          console.log("Something went wrong setting an attribute.")
-        }
+      }
+      else {
+        attrs[index] = value
       }
     }
-    const ifcEntity = ifcApi.CreateIfcEntity(0, classType, ...attrs)
-    ifcEntity.expressID = expressID
-    for (const [key, value] of Object.entries(ifcEntity)) {
-      // @ts-ignore
-      if (value === undefined) ifcEntity[key] = null
-    }
-    return ifcEntity as Record<string, any> & {type: number, expressID: number}
+    return attrs
     // const { includeRels } = config
     // if (includeRels) {
     //   const rels = this.getEntityRelations(expressID)
@@ -162,7 +260,7 @@ export class Data {
     // if (Object.keys(ifcEntity).length === 0) return null
   }
 
-  getEntityRelations(expressID: number) {
+  getItemRelations(expressID: number) {
     const index = this._data.relIndicesArray()?.indexOf(expressID)
     if (index === undefined || index === -1) return null
     const rels = this._data.rels(index);
@@ -248,24 +346,20 @@ export class Data {
   cleanIndexations() {
     this._ci = null
     this._gi = null
+    this._cli = null
   }
 
   async getAllClassNames() {
     const classIds = Object.keys(this._classesIndex)
-    const ifcApi = new WEBIFC.IfcAPI()
-    await ifcApi.Init()
     const names: string[] = []
-    for (const id of classIds) {
-      names.push(ifcApi.GetNameFromTypeCode(Number(id)))
-    }
-    ifcApi.Dispose()
+    for (const id of classIds) names.push(this._categoryNames[Number(id)])
     return names
   }
 
   get classes() {
     const types: number[] = []
-    for (let i = 0; i < this._data.classesLength(); i++) {
-      const type = this._data.classes(i);
+    for (let i = 0; i < this._data.categoriesLength(); i++) {
+      const type = this._data.categories(i);
       if (type === null) continue
       types.push(Number(type))
     }
@@ -275,37 +369,29 @@ export class Data {
   /**
    * 
    * @param id GlobalID or ExpressID of the entity to get its class from
-   * @returns The WebIFC class code
+   * @returns The category code
    */
   getEntityClass(id: number | string) {
     const expressID = typeof id === "number" ? id : this.getEntityByGuid(id)
     if (!expressID) return null
-    const entityIndex = this._data.expressIdsArray()?.indexOf(expressID)
+    const entityIndex = this._data.localIdsArray()?.indexOf(expressID)
     if (entityIndex === undefined) return null
-    const classIndex = this._data.expressIdsType(entityIndex)
+    const classIndex = this._data.localIdsType(entityIndex)
     if (classIndex === null) return null
-    const classCode = this._data.classes(classIndex)
+    const classCode = this._data.categories(classIndex)
     if (!classCode) return null
     return Number(classCode)
   }
 
-  getAllEntitiesOfClass(type: number) {
-    const idsArray = this._data.expressIdsArray()
-    const idsTypeArray = this._data.expressIdsTypeArray()
-    const index = this._classesIndex[type];
-    if (!(idsArray && idsTypeArray && index !== undefined)) return []
-    const range = this._data.classExpressIds(index)
-    if (!range) return []
-    const start = idsTypeArray.indexOf(index)
-    const end = idsTypeArray.lastIndexOf(index)
-    return [...idsArray.slice(start, end)]
+  getAllItemsOfClass(type: number) {
+    return this._categoriesToLocalIds[type]
   }
 
-  getEntityGuid(expressID: number) {
-    const index = this._data.expressIdsArray()?.indexOf(expressID)
+  getItemGuid(expressID: number) {
+    const index = this._data.localIdsArray()?.indexOf(expressID)
     if (index === undefined) return null
     const guidIndex = this._data.guidsIdArray()?.indexOf(index)
-    if (guidIndex === undefined) return null
+    if (guidIndex === undefined || guidIndex === -1) return null
     const guid = this._data.guids(guidIndex)
     if (guid === undefined) return null
     return guid
@@ -316,35 +402,35 @@ export class Data {
     if (index === undefined) return null
     const entityIndex = this._data.guidsId(index)
     if (entityIndex === null) return null
-    const expressID = this._data.expressIds(entityIndex)
+    const expressID = this._data.localIds(entityIndex)
     return expressID
   }
 
-  private _newEntities: Record<number, any> = {}
-  async addEntity(data: any) {
-    this.maxExpressID = this.maxExpressID++
-    data.expressID = this.maxExpressID
-    this._newEntities[this.maxExpressID] = data
-  }
+  // private _newEntities: Record<number, any> = {}
+  // async addEntity(data: any) {
+  //   this.maxExpressID = this.maxExpressID++
+  //   data.expressID = this.maxExpressID
+  //   this._newEntities[this.maxExpressID] = data
+  // }
 
   private _changesMap: Record<number, Record<number, any>> = {}
 
-  async updateAttribute(expressID: number, attrName: string, value: any) {
-    const ifcApi = await this.getIfcApi()
-    const classCode = this.getEntityClass(expressID)
-    if (!classCode) return false
-    const ifcEntity = ifcApi.CreateIfcEntity(0, classCode)
-    const attrIndex = Object.keys(ifcEntity).indexOf(attrName) - 2
-    if (attrIndex < 0) return false
-    if (!this._changesMap[expressID]) this._changesMap[expressID] = {}
-    if (!this._changesMap[expressID][attrIndex]) this._changesMap[expressID][attrIndex] = ""
-    this._changesMap[expressID][attrIndex] = value
-    return true
-  }
+  // async updateAttribute(expressID: number, attrName: string, value: any) {
+  //   const ifcApi = await this.getIfcApi()
+  //   const classCode = this.getEntityClass(expressID)
+  //   if (!classCode) return false
+  //   const ifcEntity = ifcApi.CreateIfcEntity(0, classCode)
+  //   const attrIndex = Object.keys(ifcEntity).indexOf(attrName) - 2
+  //   if (attrIndex < 0) return false
+  //   if (!this._changesMap[expressID]) this._changesMap[expressID] = {}
+  //   if (!this._changesMap[expressID][attrIndex]) this._changesMap[expressID][attrIndex] = ""
+  //   this._changesMap[expressID][attrIndex] = value
+  //   return true
+  // }
 
-  async createType(type: number, value: string | number | boolean | number[]) {
-    const ifcApi = await this.getIfcApi()
-    if (!ifcApi) return null
-    return ifcApi.CreateIfcType(0, type, value)
-  }
+  // async createType(type: number, value: string | number | boolean | number[]) {
+  //   const ifcApi = await this.getIfcApi()
+  //   if (!ifcApi) return null
+  //   return ifcApi.CreateIfcType(0, type, value)
+  // }
 }

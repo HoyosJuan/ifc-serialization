@@ -8,27 +8,21 @@ table SpatialStructure {
 
 table Entity {
   attrs: [string];
+  // rels: [string];
 }
 
 table Rel {
   defs: [string];
 }
 
-table Range {
-  start: uint;
-  end: uint;
-}
-
 table Data {
-  schema: string;
-  maxExpressId: int;
-  classes: [int64];
-  expressIds: [int];
-  expressIdsType: [ubyte]; // Works if less than 255 Data.classes are converted
-  classExpressIds: [Range];
+  metadata: string; // JSON string for generic data about the file
+  categories: [int64];
+  localIds: [uint]; // positive integer file specific identifiers
+  localIdsType: [ubyte]; // Works if less than 255 Data.categories are converted
   guids: [string];
   guidsId: [uint];
-  entities: [Entity];
+  attributes: [Entity];
   // WIP 👇
   spatialStructure: SpatialStructure;
   relIndices: [int];

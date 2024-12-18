@@ -111,10 +111,11 @@ export class Serializer {
     const entitiesOffsets: number[] = []
     const guidsId: number[] = []
     const guids: number[] = []
-    const typeIds: number[] = []
+    // const typeIds: number[] = []
 
     const entitiesToProcess = this.getEntitiesToProcess()
-    const toProcess = modelClasses.filter(type => ifcApi.IsIfcElement(type) || entitiesToProcess.includes(type))
+    // const toProcess = modelClasses.filter(type => ifcApi.IsIfcElement(type) || entitiesToProcess.includes(type))
+    const toProcess = modelClasses.filter(type => entitiesToProcess.includes(type))
 
     const builder = new fb.Builder(1024)
 
@@ -125,7 +126,6 @@ export class Serializer {
 
       let classWasProcessed = false
 
-      let entityCount = this._expressIDs.length
       for (let index = 0; index < classEntities.size(); index++) {
         const expressID = classEntities.get(index);
         const attrs = await ifcApi.properties.getItemProperties(modelID, expressID) as RawEntityAttrs
@@ -146,8 +146,6 @@ export class Serializer {
       if (!classWasProcessed) continue
       classIndex++
 
-      const rangeOffset = IFC.Range.createRange(builder, entityCount, this._expressIDs.length)
-      typeIds.push(rangeOffset)
       this._classes.push(BigInt(entityClass))
     }
 
@@ -178,28 +176,30 @@ export class Serializer {
     const { indices: relIndicesVector, relations: relsVector } = this.serializeRelations(builder)
 
     const treeOffset = await this.createSpatialTree(builder)
+    
+    const metadata = {
+      schema,
+      maxExpressID: ifcApi.GetMaxExpressID(modelID)
+    }
+    const metadataOffset = builder.createString(JSON.stringify(metadata))
 
-    const typeIdsVector = IFC.Data.createClassExpressIdsVector(builder, typeIds)
-    const expressIdsTypeVector = IFC.Data.createExpressIdsTypeVector(builder, this._expressIdsType)
-    const entitiesVector = IFC.Data.createEntitiesVector(builder, entitiesOffsets)
-    const expressIdsVector = IFC.Data.createExpressIdsVector(builder, this._expressIDs)
-    const classesVector = IFC.Data.createClassesVector(builder, this._classes)
+    const localIdsTypeVector = IFC.Data.createLocalIdsTypeVector(builder, this._expressIdsType)
+    const attributesVector = IFC.Data.createAttributesVector(builder, entitiesOffsets)
+    const localIdsVector = IFC.Data.createLocalIdsVector(builder, this._expressIDs)
+    const classesVector = IFC.Data.createCategoriesVector(builder, this._classes)
     const guidsVector = IFC.Data.createGuidsVector(builder, guids)
     const guidsIdVector = IFC.Data.createGuidsIdVector(builder, guidsId)
-    const schemaOffset = builder.createString(schema)
     IFC.Data.startData(builder)
-    IFC.Data.addSchema(builder, schemaOffset)
-    IFC.Data.addEntities(builder, entitiesVector)
-    IFC.Data.addExpressIds(builder, expressIdsVector)
-    IFC.Data.addClasses(builder, classesVector)
-    IFC.Data.addExpressIdsType(builder, expressIdsTypeVector)
-    IFC.Data.addClassExpressIds(builder, typeIdsVector)
+    IFC.Data.addMetadata(builder, metadataOffset)
+    IFC.Data.addAttributes(builder, attributesVector)
+    IFC.Data.addLocalIds(builder, localIdsVector)
+    IFC.Data.addCategories(builder, classesVector)
+    IFC.Data.addLocalIdsType(builder, localIdsTypeVector)
     IFC.Data.addRelIndices(builder, relIndicesVector)
     IFC.Data.addRels(builder, relsVector)
     IFC.Data.addGuidsId(builder, guidsIdVector)
     IFC.Data.addGuids(builder, guidsVector)
     IFC.Data.addSpatialStructure(builder, treeOffset)
-    IFC.Data.addMaxExpressId(builder, ifcApi.GetMaxExpressID(modelID))
     const outData = IFC.Data.endData(builder)
 
     builder.finish(outData)
@@ -247,7 +247,8 @@ export class Serializer {
         }
         // index and value must always be at index 0 and 1
         // other data can be set starting index 2
-        const attrData = [index, value]
+        // const attrData = [index, value]
+        const attrData = [attrName, value]
         const dataTypeName =
           "name" in attrValue && attrValue.name
             ? attrValue.name
@@ -267,15 +268,25 @@ export class Serializer {
     return {attrOffsets, guidOffset}
   }
 
-  private serializeRelations(builder: fb.Builder) {
+  private serializeRelations(builder: fb.Builder, clean = false) {
     const rels: number[] = []
-    for (const [_, entityRels] of Object.entries(this._relationsMap)) {
+    const ids: number[] = []
+    for (const [expressID, entityRels] of Object.entries(this._relationsMap)) {
+      if (clean && !this._expressIDs.includes(Number(expressID))) continue // very expensive
       const definitions: number[] = []
-      for (const entry of Object.entries(entityRels)) {
-        const hash = JSON.stringify(entry)
+      for (const [attrName, _rels] of Object.entries(entityRels)) {
+        let rels = _rels
+        if (clean) {
+          rels = _rels.filter(id => this._expressIDs.includes(id)) // very expensive
+          if (rels.length === 0) continue
+        }
+        const hash = JSON.stringify([attrName, rels])
         const offset = builder.createSharedString(hash)
         definitions.push(offset)
       }
+      if (clean && definitions.length === 0) continue
+      ids.push(this._expressIDs.indexOf(Number(expressID)))
+      // ids.push(Number(expressID))
       const defsVector = IFC.Rel.createDefsVector(builder, definitions)
       IFC.Rel.startRel(builder)
       IFC.Rel.addDefs(builder, defsVector)
@@ -283,7 +294,6 @@ export class Serializer {
       rels.push(rel)
     }
     const relations = IFC.Data.createRelsVector(builder, rels)
-    const ids = Object.keys(this._relationsMap).map(id => Number(id))
     const indices = IFC.Data.createRelIndicesVector(builder, ids)
     return { indices, relations }
   }

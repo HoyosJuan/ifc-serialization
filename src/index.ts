@@ -64,7 +64,7 @@ import { Serializer } from "./Serializer"
 // }
 
 const run = async (forceSerialize: boolean) => {
-  const name = "medium"
+  const name = "small"
   if (forceSerialize) {
     const lastBinFile = fs.readFileSync(`${name}.bin`)
     const previousSize = (lastBinFile.length / (1024 * 1024)).toFixed(3)
@@ -72,7 +72,7 @@ const run = async (forceSerialize: boolean) => {
     const ifcFile = fs.readFileSync(`${name}.ifc`)
     const ifcBuffer = new Uint8Array(ifcFile.buffer)
     const serializer = new Serializer()
-    // serializer.classesToInclude = [{entities: [WEBIFC.IFCSITE], rels: []}]
+    // serializer.classesToInclude = [{entities: [WEBIFC.IFCWALLSTANDARDCASE, WEBIFC.IFCBUILDINGSTOREY], rels: [WEBIFC.IFCRELCONTAINEDINSPATIALSTRUCTURE]}]
     const bytes = await serializer.process(ifcBuffer)
     const executionTime = ((performance.now() - start) / 1000).toFixed(4)
     fs.writeFileSync(`${name}.bin`, bytes)
@@ -83,41 +83,50 @@ const run = async (forceSerialize: boolean) => {
     console.log("New size:", `${newSize}mb`)
   }
 
-  const ifcApi = new WEBIFC.IfcAPI()
-  await ifcApi.Init()
+  // const ifcApi = new WEBIFC.IfcAPI()
+  // await ifcApi.Init()
   
-  const dataSetStart = performance.now()
-  const bytes = new Uint8Array(fs.readFileSync(`${name}.bin`))
-  const model = new Data(bytes)
-  console.log("Data set in:", `${(performance.now() - dataSetStart).toFixed(4)}ms`)
+  // const dataSetStart = performance.now()
+  // const bytes = new Uint8Array(fs.readFileSync(`${name}.bin`))
+  // const model = new Data(bytes)
+  // console.log("Data set in:", `${(performance.now() - dataSetStart).toFixed(4)}ms`)
 
-  const modelID = ifcApi.CreateModel({ schema: model.schema })
+  // fs.writeFileSync(`${name}-data.json`, JSON.stringify(model.data, null, 1))
+
+  // console.log(model.localIds, JSON.stringify(model.relations, null, 2))
+  // console.log(model.getItemGuid(25123), model.getItemGuid(186))
+  // const items = model.getAllItemsOfClass(WEBIFC.IFCWALLSTANDARDCASE)
+  // for (const item of items) {
+  //   console.log(await model.getItemAttributes(item, {includeGuid: true}))
+  // }
+
+  // const modelID = ifcApi.CreateModel({ schema: model.schema })
   
-  const operationStart = performance.now()
-  const attrs = await model.getEntityAttributes(25219)
-  if (attrs) {
-    const type = await model.createType(WEBIFC.IFCLABEL, "My New Entity Name")
-    if (type) await model.updateAttribute(25219, "Name", type)
-    const newAttrs = await model.getEntityAttributes(25219)
-    if (newAttrs) {
-      console.log(newAttrs)
-      const asd = new WEBIFC.IFC4.IfcPropertySingleValue(
-        new WEBIFC.IFC4.IfcIdentifier("CustomProp"),
-        null,
-        new WEBIFC.IFC4.IfcReal(2),
-        null
-      )
-      asd.expressID = 2
-      ifcApi.WriteLine(modelID, asd)
-      console.log(ifcApi.GetLine(modelID, 2))
-      const attrName = Object.keys(asd).slice(2)[2]
-      // @ts-ignore
-      asd[attrName] = {type: 10, name: "IFCINTEGER", value: 2}
-      ifcApi.WriteLine(modelID, asd)
-      console.log(ifcApi.GetLine(modelID, 2))
-    }
-  }
-  console.log("Operation done in:", `${(performance.now() - operationStart).toFixed(4)}ms`)
+  // const operationStart = performance.now()
+  // const attrs = await model.getEntityAttributes(25219)
+  // if (attrs) {
+  //   const type = await model.createType(WEBIFC.IFCLABEL, "My New Entity Name")
+  //   if (type) await model.updateAttribute(25219, "Name", type)
+  //   const newAttrs = await model.getEntityAttributes(25219)
+  //   if (newAttrs) {
+  //     console.log(newAttrs)
+  //     const asd = new WEBIFC.IFC4.IfcPropertySingleValue(
+  //       new WEBIFC.IFC4.IfcIdentifier("CustomProp"),
+  //       null,
+  //       new WEBIFC.IFC4.IfcReal(2),
+  //       null
+  //     )
+  //     asd.expressID = 2
+  //     ifcApi.WriteLine(modelID, asd)
+  //     console.log(ifcApi.GetLine(modelID, 2))
+  //     const attrName = Object.keys(asd).slice(2)[2]
+  //     // @ts-ignore
+  //     asd[attrName] = {type: 10, name: "IFCINTEGER", value: 2}
+  //     ifcApi.WriteLine(modelID, asd)
+  //     console.log(ifcApi.GetLine(modelID, 2))
+  //   }
+  // }
+  // console.log("Operation done in:", `${(performance.now() - operationStart).toFixed(4)}ms`)
 
   // console.log(model.getEntityGuid(71286))
   // console.log(model.getEntityByGuid("0mIuNN$0HBuCdIzdLQSa58"))
@@ -193,4 +202,4 @@ const run = async (forceSerialize: boolean) => {
   // console.log(ids.length, "properties retrieved in", `${((performance.now() - start) / 1000).toFixed(5)}s`)
 }
 
-run(false)
+run(true)

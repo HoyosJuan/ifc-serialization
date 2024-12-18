@@ -1,19 +1,14 @@
 ### How is all data stored?
 ```ts
 const ifcData = {
-  types: [4582374, 1238892, 12837905], // ok
-  ids: [123, 234, 345, 456, 567], // ok
-  idsType: [0, 0, 1, 2, 2], // ok
-  typeIds: [
-    {start: 0, end: 2},
-    {start: 2, end: 3},
-    {start: 3, end: 5}
-  ], // ok
+  categories: [4582374, 1238892, 12837905], // ok
+  localIds: [123, 234, 345, 456, 567], // ok
+  localIdsType: [0, 0, 1, 2, 2], // ok
   guids: [
-    "98eynq7ntqew",
-    "oih98qgw9qwe",
-    "aiosdh98qbdw",
-    "qasod89812b3"
+    "2idC0G3ezCdhA9WVjWemcz",
+    "05Dvi5_7z8KBj0EkNX5hAa",
+    "3Ki06xjW9E_uKWy2vG0yO_",
+    "2idC0G3ezCdhA9YWPWemcz"
   ], // ok
   guidsId: [0, 1, 3, 4], // ok
   spatialStructure: {
@@ -26,9 +21,11 @@ const ifcData = {
     ]
   }, // ok, but isn't easier to use the direct type and id values?
   entities: [
-    { attrs: '[[0,"WallName",425211],[4,"WallDescription",5464533]]' }
+    { attrs: '[["Name","WallName",425211],["Description","WallDescription",5464533]]' }
   ], // ok
-  // Current approach for relations
+  relations: [
+    { rels: '[["IsDefinedBy", [234]], ["ContainedInStructure", [345]]]' }
+  ]
 }
 ```
 
@@ -41,15 +38,15 @@ const entities = [
     // Approach A
     // indices: [2, 7],
     // values: ["Any Entity Name", "123"],
-    // types: ["IfcLabel", "IfcIdentifier"]
+    // categories: ["IfcLabel", "IfcIdentifier"]
     // Approach B
     // attrs: [
     //   [2, "Any Entity Name"],
     //   [7, "123"],
     // ],
-    // types: ["IfcLabel", "IfcIdentifier"]
+    // categories: ["IfcLabel", "IfcIdentifier"]
     // Approach C
-    // types: [12348123, 36456458],
+    // categories: [12348123, 36456458],
     // attrs: [
     //   [2, "Any Entity Name"],
     //   [7, "123"],
