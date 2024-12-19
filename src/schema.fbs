@@ -8,7 +8,6 @@ table SpatialStructure {
 
 table Entity {
   attrs: [string];
-  // rels: [string];
 }
 
 table Rel {
@@ -23,10 +22,10 @@ table Data {
   guids: [string];
   guidsId: [uint];
   attributes: [Entity];
-  // WIP 👇
-  spatialStructure: SpatialStructure;
   relIndices: [int];
   rels: [Rel];
+  // WIP 👇
+  spatialStructure: SpatialStructure;
 }
 
 root_type Data;

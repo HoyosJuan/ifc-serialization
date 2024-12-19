@@ -1,6 +1,6 @@
 import * as WEBIFC from "web-ifc"
 import * as fs from "fs"
-import { Data } from "./Data"
+import { Properties } from "./Data"
 import { Serializer } from "./Serializer"
 
 // type TableRowData = Record<string, string | number | boolean>
@@ -63,6 +63,11 @@ import { Serializer } from "./Serializer"
 //   }
 // }
 
+interface IfcMetadata {
+  schema: WEBIFC.Schemas.IFC2X3 | WEBIFC.Schemas.IFC4 | WEBIFC.Schemas.IFC4X3,
+  maxExpressID: number
+}
+
 const run = async (forceSerialize: boolean) => {
   const name = "small"
   if (forceSerialize) {
@@ -86,12 +91,163 @@ const run = async (forceSerialize: boolean) => {
   // const ifcApi = new WEBIFC.IfcAPI()
   // await ifcApi.Init()
   
-  // const dataSetStart = performance.now()
-  // const bytes = new Uint8Array(fs.readFileSync(`${name}.bin`))
-  // const model = new Data(bytes)
-  // console.log("Data set in:", `${(performance.now() - dataSetStart).toFixed(4)}ms`)
+  const dataSetStart = performance.now()
+  const bytes = new Uint8Array(fs.readFileSync(`${name}.bin`))
+  const model = new Properties<IfcMetadata>(bytes)
+  console.log("Data set in:", `${(performance.now() - dataSetStart).toFixed(4)}ms`)
+  
+  fs.writeFileSync(`${name}-data.json`, JSON.stringify(model.data, null, 1))
+  
+  // const rel1 = performance.now()
+  // console.log(JSON.stringify(model.getItemRelations(186, { keys: ["ContainedInStructure"] }), null, 1))
+  // console.log("Rels retrieved in:", `${(performance.now() - rel1).toFixed(4)}ms`)
+  // const rel2 = performance.now()
+  // console.log(JSON.stringify(model.getItemRelations(138, { keys: ["ContainsElements"] }), null, 1))
+  // console.log("Rels retrieved in:", `${(performance.now() - rel2).toFixed(4)}ms`)
+  
+  console.log(JSON.stringify(model.getItemAttributes(186, { rels: ["IsDefinedBy"] }), null, 1))
+  // console.log(JSON.stringify(model.getItemRelations(186, { recursive: true }), null, 1))
+  
+  // Get item attributes
+  // model.getItemAttributes(186)
+  // const result = {
+  //   Name: "Wall Name",
+  //   Description: "Wall Description"
+  // }
 
-  // fs.writeFileSync(`${name}-data.json`, JSON.stringify(model.data, null, 1))
+  // Get item attributes with all rels
+  // model.getItemAttributes(186, { rels: true })
+  // const result = {
+  //   Name: "Wall Name",
+  //   Description: "Wall Description",
+  //   ContainedInStructure: [
+  //     {
+  //       Name: "Level 01",
+  //       IsDefinedBy: [
+  //         {
+  //           Name: "Reference",
+  //           NominalValue: "Level 01"
+  //         }
+  //       ]
+  //     }
+  //   ],
+  //   IsDefinedBy: [
+  //     {
+  //       Name: "Pset_WallCommon",
+  //       HasProperties: [
+  //         {
+  //           Name: "IsLoadBearing",
+  //           NominalValue: true
+  //         }
+  //       ]
+  //     }
+  //   ]
+  // }
+
+  // Get item attributes with rels
+  // model.getItemAttributes(186, { rels: ["IsDefinedBy"] })
+  // const result = {
+  //   Name: "Wall Name",
+  //   Description: "Wall Description",
+  //   IsDefinedBy: [
+  //     {
+  //       Name: "Pset_WallCommon",
+  //       HasProperties: [
+  //         {
+  //           Name: "IsLoadBearing",
+  //           NominalValue: true
+  //         }
+  //       ]
+  //     }
+  //   ]
+  // }
+
+  // Get item relations
+  // model.getItemRelations(186)
+  // const result = {
+  //   IsDefinedBy: [1],
+  //   ContainedInSpatialStructure: [2]
+  // }
+
+  // Get item relations recursive
+  // model.getItemRelations(186, { recursive: true })
+  // const result = {
+  //   IsDefinedBy: [
+  //     {
+  //       localId: 1,
+  //       HasProperties: [
+  //         { localId: 3 }
+  //       ]
+  //     }
+  //   ]
+  // }
+
+  // If recursive is true, attributes will be included regardless includeAttributes.
+  // If recursive is false, attributes will be included based on includeAttributes.
+
+  // Get item relations with attributes
+  // model.getItemRelations(186, { includeAttributes: true })
+  // const result = {
+  //   ContainedInStructure: [
+  //     {
+  //       Name: "Level 01"
+  //     }
+  //   ],
+  //   IsDefinedBy: [
+  //     {
+  //       Name: "Pset_WallCommon"
+  //     }
+  //   ]
+  // }
+
+  // Get item relations recursive with attributes
+  // model.getItemRelations(186, { includeAttributes: true, recursive: true })
+  // const result = {
+  //   ContainedInStructure: [
+  //     {
+  //       Name: "Level 01",
+  //       IsDefinedBy: [
+  //         {
+  //           Name: "Reference",
+  //           NominalValue: "Level 01"
+  //         }
+  //       ]
+  //     }
+  //   ],
+  //   IsDefinedBy: [
+  //     {
+  //       Name: "Pset_WallCommon",
+  //       HasProperties: [
+  //         {
+  //           Name: "IsLoadBearing",
+  //           NominalValue: true
+  //         }
+  //       ]
+  //     }
+  //   ]
+  // }
+
+  // Get item relations recursive with attributes and keys
+  // model.getItemRelations(186, { keys: ["ContainedInStructure"], includeAttributes: true, recursive: true })
+  // const result = {
+  //   ContainedInStructure: [
+  //     {
+  //       Name: "Level 01",
+  //       IsDefinedBy: [
+  //         {
+  //           Name: "Reference",
+  //           NominalValue: "Level 01"
+  //         }
+  //       ]
+  //     }
+  //   ]
+  // }
+
+  // Get item relations with keys
+  // model.getItemRelations(186, { keys: ["ContainedInStructure"] })
+  // const result = {
+  //   ContainedInStructure: [2]
+  // }
 
   // console.log(model.localIds, JSON.stringify(model.relations, null, 2))
   // console.log(model.getItemGuid(25123), model.getItemGuid(186))
@@ -202,4 +358,4 @@ const run = async (forceSerialize: boolean) => {
   // console.log(ids.length, "properties retrieved in", `${((performance.now() - start) / 1000).toFixed(5)}s`)
 }
 
-run(true)
+run(false)

@@ -24,14 +24,14 @@ static getSizePrefixedRootAsSpatialStructure(bb:flatbuffers.ByteBuffer, obj?:Spa
   return (obj || new SpatialStructure()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-type():bigint {
+id():number {
   const offset = this.bb!.__offset(this.bb_pos, 4);
-  return offset ? this.bb!.readInt64(this.bb_pos + offset) : BigInt('0');
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : -1;
 }
 
-id():number {
+type():bigint {
   const offset = this.bb!.__offset(this.bb_pos, 6);
-  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+  return offset ? this.bb!.readInt64(this.bb_pos + offset) : BigInt('-1');
 }
 
 children(index: number, obj?:SpatialStructure):SpatialStructure|null {
@@ -48,12 +48,12 @@ static startSpatialStructure(builder:flatbuffers.Builder) {
   builder.startObject(3);
 }
 
-static addType(builder:flatbuffers.Builder, type:bigint) {
-  builder.addFieldInt64(0, type, BigInt('0'));
+static addId(builder:flatbuffers.Builder, id:number) {
+  builder.addFieldInt32(0, id, -1);
 }
 
-static addId(builder:flatbuffers.Builder, id:number) {
-  builder.addFieldInt32(1, id, 0);
+static addType(builder:flatbuffers.Builder, type:bigint) {
+  builder.addFieldInt64(1, type, BigInt('-1'));
 }
 
 static addChildren(builder:flatbuffers.Builder, childrenOffset:flatbuffers.Offset) {
@@ -77,10 +77,10 @@ static endSpatialStructure(builder:flatbuffers.Builder):flatbuffers.Offset {
   return offset;
 }
 
-static createSpatialStructure(builder:flatbuffers.Builder, type:bigint, id:number, childrenOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createSpatialStructure(builder:flatbuffers.Builder, id:number, type:bigint, childrenOffset:flatbuffers.Offset):flatbuffers.Offset {
   SpatialStructure.startSpatialStructure(builder);
-  SpatialStructure.addType(builder, type);
   SpatialStructure.addId(builder, id);
+  SpatialStructure.addType(builder, type);
   SpatialStructure.addChildren(builder, childrenOffset);
   return SpatialStructure.endSpatialStructure(builder);
 }

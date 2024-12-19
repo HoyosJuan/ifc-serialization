@@ -6,4 +6,3 @@ export { Data } from './entities/data.js';
 export { Entity } from './entities/entity.js';
 export { Rel } from './entities/rel.js';
 export { SpatialStructure } from './entities/spatial-structure.js';
-export { Types } from './entities/types.js';

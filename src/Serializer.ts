@@ -111,11 +111,10 @@ export class Serializer {
     const entitiesOffsets: number[] = []
     const guidsId: number[] = []
     const guids: number[] = []
-    // const typeIds: number[] = []
 
     const entitiesToProcess = this.getEntitiesToProcess()
-    // const toProcess = modelClasses.filter(type => ifcApi.IsIfcElement(type) || entitiesToProcess.includes(type))
-    const toProcess = modelClasses.filter(type => entitiesToProcess.includes(type))
+    const toProcess = modelClasses.filter(type => ifcApi.IsIfcElement(type) || entitiesToProcess.includes(type))
+    // const toProcess = modelClasses.filter(type => entitiesToProcess.includes(type))
 
     const builder = new fb.Builder(1024)
 
@@ -280,13 +279,13 @@ export class Serializer {
           rels = _rels.filter(id => this._expressIDs.includes(id)) // very expensive
           if (rels.length === 0) continue
         }
-        const hash = JSON.stringify([attrName, rels])
+        const hash = JSON.stringify([attrName, ...rels])
         const offset = builder.createSharedString(hash)
         definitions.push(offset)
       }
       if (clean && definitions.length === 0) continue
-      ids.push(this._expressIDs.indexOf(Number(expressID)))
-      // ids.push(Number(expressID))
+      // ids.push(this._expressIDs.indexOf(Number(expressID)))
+      ids.push(Number(expressID))
       const defsVector = IFC.Rel.createDefsVector(builder, definitions)
       IFC.Rel.startRel(builder)
       IFC.Rel.addDefs(builder, defsVector)
