@@ -25,45 +25,8 @@ const ifcData = {
   ], // ok
   relations: [
     { rels: '[["IsDefinedBy", [234]], ["ContainedInStructure", [345]]]' }
-  ]
+  ] // ok
 }
-```
-
-### How are attributes stored?
-```ts
-// entity processed: 123
-const ids = [123]
-const entities = [
-  {
-    // Approach A
-    // indices: [2, 7],
-    // values: ["Any Entity Name", "123"],
-    // categories: ["IfcLabel", "IfcIdentifier"]
-    // Approach B
-    // attrs: [
-    //   [2, "Any Entity Name"],
-    //   [7, "123"],
-    // ],
-    // categories: ["IfcLabel", "IfcIdentifier"]
-    // Approach C
-    // categories: [12348123, 36456458],
-    // attrs: [
-    //   [2, "Any Entity Name"],
-    //   [7, "123"],
-    // ],
-    // Approach D
-    indexing: [
-      {index: 2, type: 234798234},
-      {index: 7, type: 917239074},
-    ],
-    attrs: [ "Any Entity Name", "123" ]
-    // Approach E
-    // attrs: [
-    //   [2, "Any Entity Name", "IfcLabel"],
-    //   [7, "123", "IfcIdentifier"],
-    // ]
-  }
-]
 ```
 
 ### How are relations stored?

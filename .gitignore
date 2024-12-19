@@ -1,3 +1,7 @@
 node_modules
 *.ifc
 dist
+*-data.json
+*-tree.json
+*.bin
+*.aec
