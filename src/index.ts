@@ -1,7 +1,8 @@
 import * as WEBIFC from "web-ifc"
 import * as fs from "fs"
 import { Properties } from "./reader/Properties"
-import { Serializer as IfcSerializer } from "./serializers/ifc"
+import { IfcSerializer } from "./serializers/ifc"
+import { IfcExporter } from "./exporters/ifc"
 
 // type TableRowData = Record<string, string | number | boolean>
 
@@ -70,7 +71,7 @@ interface IfcMetadata {
 }
 
 const run = async (serialize: boolean) => {
-  const name = "small"
+  const name = "medium"
   const extension = ".ifc"
   const format = ".aec"
   if (serialize) {
@@ -113,6 +114,10 @@ const run = async (serialize: boolean) => {
   const bytes = new Uint8Array(fs.readFileSync(`${name}${format}`))
   const model = new Properties<IfcMetadata>(bytes)
   console.log("Data ready time:", `${(performance.now() - dataReadyStart).toFixed(4)}ms`)
+
+  const exporter = new IfcExporter()
+  const ifc = await exporter.process(model)
+  fs.writeFileSync(`${name}-new.ifc`, ifc)
   
   // fs.writeFileSync(`${name}-data.json`, JSON.stringify(model.data, null, 1))
 
@@ -149,4 +154,4 @@ const run = async (serialize: boolean) => {
   // console.log(ids.length, "properties retrieved in", `${((performance.now() - start) / 1000).toFixed(5)}s`)
 }
 
-run(true)
+run(false)

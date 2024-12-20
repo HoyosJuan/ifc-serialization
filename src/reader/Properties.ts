@@ -14,6 +14,7 @@ interface GetAttrsConfig {
   includeGuid: boolean;
   includeCategory: boolean;
   includeLocalId: boolean;
+  includeTypes: boolean;
 }
 
 // If recursive is true, attributes will be included regardless includeAttributes.
@@ -219,14 +220,15 @@ export class Properties<
     rels: false,
     includeGuid: false,
     includeCategory: false,
-    includeLocalId: false
+    includeLocalId: false,
+    includeTypes: false
   }
 
   getItemAttributes(
     id: Identifier,
     config?: Partial<GetAttrsConfig>
   ) {
-    const { includeGuid, includeCategory, includeLocalId, rels } = { ...this._getAttrsConfigDefault, ...config }
+    const { includeGuid, includeCategory, includeLocalId, includeTypes, rels } = { ...this._getAttrsConfigDefault, ...config }
     const isLocalId = typeof id === "number"
     const localId = isLocalId ? id : this._guidsIndex[id]
     const attrsIndex = this._data.localIdsArray()?.indexOf(localId)
@@ -258,12 +260,12 @@ export class Properties<
     for (let j = 0; j < itemBuffer.attrsLength(); j++) {
       const attr = itemBuffer.attrs(j);
       if (!attr) continue
-      let [index, value] = JSON.parse(attr)
+      let [index, value, type] = JSON.parse(attr)
       // if (changesMap?.[index]) {
         // attrs[index] = changesMap[index]
       // }
       // else {
-        attrs[index] = value
+        attrs[index] = includeTypes ? {value, type} : value
       // }
     }
     if (rels) {

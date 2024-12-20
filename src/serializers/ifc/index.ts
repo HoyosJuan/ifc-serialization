@@ -3,7 +3,7 @@ import * as AEC from "../../flatbuffers/aec/properties"
 import * as WEBIFC from "web-ifc"
 import { RawEntityAttrs, invAttrsMap } from "./src"
 
-export class Serializer {
+export class IfcSerializer {
   private _expressIDs: number[] = []
   private _classes: bigint[] = []
   private _expressIdsType: number[] = []
@@ -47,8 +47,8 @@ export class Serializer {
   }
 
   classesToInclude = [
-    Serializer.materials,
-    Serializer.properties,
+    IfcSerializer.materials,
+    IfcSerializer.properties,
     {
       entities: [
         WEBIFC.IFCPROJECT,
