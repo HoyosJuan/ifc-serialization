@@ -17,6 +17,7 @@ table Rel {
 table Data {
   metadata: string; // JSON string for generic data about the file
   categories: [int64];
+  maxLocalId: uint; // last localId, used when adding new items
   localIds: [uint]; // positive integer file specific identifiers
   localIdsType: [ubyte]; // Works if less than 255 Data.categories are converted
   guids: [string];

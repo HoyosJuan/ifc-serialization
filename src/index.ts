@@ -65,7 +65,8 @@ import { Serializer as IfcSerializer } from "./serializers/ifc"
 
 interface IfcMetadata {
   schema: WEBIFC.Schemas.IFC2X3 | WEBIFC.Schemas.IFC4 | WEBIFC.Schemas.IFC4X3,
-  maxExpressID: number
+  name: string,
+  description: string,
 }
 
 const run = async (serialize: boolean) => {

@@ -171,10 +171,7 @@ export class Serializer {
 
     const treeOffset = await this.createSpatialTree(builder)
     
-    const metadata = {
-      schema,
-      maxExpressID: ifcApi.GetMaxExpressID(modelID)
-    }
+    const metadata = { schema }
     const metadataOffset = builder.createString(JSON.stringify(metadata))
 
     const localIdsTypeVector = AEC.Data.createLocalIdsTypeVector(builder, this._expressIdsType)
@@ -194,6 +191,7 @@ export class Serializer {
     AEC.Data.addGuidsId(builder, guidsIdVector)
     AEC.Data.addGuids(builder, guidsVector)
     AEC.Data.addSpatialStructure(builder, treeOffset)
+    AEC.Data.addMaxLocalId(builder, ifcApi.GetMaxExpressID(modelID))
     const outData = AEC.Data.endData(builder)
 
     builder.finish(outData)

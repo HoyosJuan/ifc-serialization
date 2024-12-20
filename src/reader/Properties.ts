@@ -1,5 +1,6 @@
 import * as AEC from "../flatbuffers/aec/properties"
 import * as fb from "flatbuffers"
+import { Changes, Identifier } from "./src/types"
 
 interface SpatialStructure {
   type?: number;
@@ -222,7 +223,7 @@ export class Properties<
   }
 
   getItemAttributes(
-    id: number | string,
+    id: Identifier,
     config?: Partial<GetAttrsConfig>
   ) {
     const { includeGuid, includeCategory, includeLocalId, rels } = { ...this._getAttrsConfigDefault, ...config }
@@ -253,17 +254,17 @@ export class Properties<
       const category = this.getItemCategory(localId)
       if (category !== null) attrs.category = category
     }
-    const changesMap = this._changesMap[localId]
+    const changesMap = this._changes[localId]
     for (let j = 0; j < itemBuffer.attrsLength(); j++) {
       const attr = itemBuffer.attrs(j);
       if (!attr) continue
       let [index, value] = JSON.parse(attr)
-      if (changesMap?.[index]) {
-        attrs[index] = changesMap[index]
-      }
-      else {
+      // if (changesMap?.[index]) {
+        // attrs[index] = changesMap[index]
+      // }
+      // else {
         attrs[index] = value
-      }
+      // }
     }
     if (rels) {
       const itemRels = this.getItemRelations(localId, 
@@ -282,7 +283,7 @@ export class Properties<
     includeAttributes: false
   }
 
-  getItemRelations(id: number | string, config?: Partial<GetRelsConfig>, idsToIgnore: number[] = []) {
+  getItemRelations(id: Identifier, config?: Partial<GetRelsConfig>, idsToIgnore: number[] = []) {
     const isLocalId = typeof id === "number"
     const localId = isLocalId ? id : this._guidsIndex[id]
     const { recursive, includeAttributes, keys } = {...this._getRelsConfigDefault, ...config}
@@ -419,7 +420,7 @@ export class Properties<
    * @param id GlobalID or LocalID of the item to get its category from
    * @returns The category code
    */
-  getItemCategory(id: number | string) {
+  getItemCategory(id: Identifier) {
     const localId = typeof id === "number" ? id : this.getLocalIdByGuid(id)
     if (!localId) return null
     const itemIndex = this._data.localIdsArray()?.indexOf(localId)
@@ -461,7 +462,15 @@ export class Properties<
   //   this._newEntities[this.maxExpressID] = data
   // }
 
-  private _changesMap: Record<number, Record<string, any>> = {}
+  private _changes: Changes = {}
+
+  addItem(category: number, attributes: Record<string, any>, guid?: string) {
+
+  }
+  
+  relateItems(relationName: string, a: Identifier, b: Identifier) {
+
+  }
 
   // async updateAttribute(expressID: number, attrName: string, value: any) {
   //   const ifcApi = await this.getIfcApi()
